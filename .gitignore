@@ -1,0 +1,5 @@
+*.json
+*.sqlite3
+config.py
+application/.env
+/venv
