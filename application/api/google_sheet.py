@@ -47,10 +47,15 @@ async def get_rows(name: str) -> []:
 
 async def get_excursions_from_sheet() -> [Excursion]:
     result = []
+    worksheet = (await getWorkbook("Excursions")).sheet1
+    backup_sheet = (await getWorkbook("Excursions")).get_worksheet_by_id(306307666)
     await remove_past_excursions()
+    idx = 2
     for excursion in await get_rows("Excursions"):
         exc = await parseRow(excursion)
         result.append(exc)
+        backup_sheet.append_row(excursion)
+        worksheet.delete_row(idx)
     return result
 
 

@@ -75,10 +75,22 @@ async def get_excursion(excursion_id: int) -> Excursion:
 
 
 async def get_week_excursions() -> [Excursion]:
-    async with async_session() as sessions:
+    async with async_session() as session:
         date_from = '.'.join(str(datetime.datetime.now().date()).split('-')[::-1])
         date_to = '.'.join(str(datetime.datetime.now().date() + datetime.timedelta(days=7)).split('-')[::-1])
-        query = await sessions.scalars(select(Excursion))
+        query = await session.scalars(select(Excursion))
+        result = []
+        for excursion in query:
+            if compare_dates_interval(date_from, date_to, excursion.date) is True:
+                result.append(excursion)
+        return result
+
+
+async def get_month_excursions() -> [Excursion]:
+    async with async_session() as session:
+        date_from = '.'.join(str(datetime.datetime.now().date()).split('-')[::-1])
+        date_to = '.'.join(str(datetime.datetime.now().date() + datetime.timedelta(days=30)).split('-')[::-1])
+        query = await session.scalars(select(Excursion))
         result = []
         for excursion in query:
             if compare_dates_interval(date_from, date_to, excursion.date) is True:

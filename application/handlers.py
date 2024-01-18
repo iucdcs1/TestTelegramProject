@@ -3,8 +3,11 @@ import datetime as dt
 
 from aiogram import Router, F
 from aiogram.filters import CommandStart
+from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
+
+from aiogram_calendar import SimpleCalendarCallback, SimpleCalendar, get_user_locale
 
 import application.keyboards as kb
 from application.FSM import Form
@@ -86,6 +89,32 @@ async def user_excursion_selected(callback: CallbackQuery):
     await callback.message.answer(message, reply_markup=await kb.finish_excursion(excursion_id))
 
 
+@router.callback_query(AdminCommandFilter(), F.data.startswith('remove_excursion'))
+async def remove_excursion_by_admin(callback: CallbackQuery):
+    from run import notify_user
+
+    excursion_id = int(callback.data.split("_")[2])
+    exc = await get_excursion(excursion_id)
+
+    guides = await get_guide_list(excursion_id)
+    if guides:
+        for guide in guides:
+            await notify_user((await get_user_by_id(int(guide))).telegram_id,
+                              f"Экскурсия на {exc.date + ' ' + ':'.join(exc.time.split(':')[:2])} была удалена менеджером!")
+
+    await remove_excursion(excursion_id, False)
+    await callback.message.answer("Экскурсия была удалена", reply_markup=kb.main_admin)
+
+
+@router.callback_query(AdminCommandFilter(), F.data.startswith('remove_confirmation'))
+async def confirm_remove_excursion(callback: CallbackQuery):
+    message = f"Вы точно хотите удалить выбранную экскурсию?\n" \
+              f"После удаление она может быть найдена в backup-таблице.\n" \
+              f"В случае необходимости восстановления свяжитесь с @NPggL"
+    excursion_id = int(callback.data.split('_')[2])
+    await callback.message.answer(message, reply_markup=kb.remove_confirm(excursion_id))
+
+
 @router.callback_query(F.data.startswith('finish_'))
 async def finish_selected_excursion(callback: CallbackQuery):
     from run import notify_user
@@ -136,16 +165,24 @@ async def admin_panel(message: Message):
 
 
 @router.message(AdminCommandFilter(), F.text == 'Изменение экскурсий')
-async def edit_excursion(message: Message, state: FSMContext):
-    await state.set_state(Form.excursion_choice_date_from)
-    await message.answer('Дата экскурсии: (DD.MM.YYYY)', reply_markup=kb.week_panel)
+async def edit_excursion(message: Message):
+    await message.answer('Выберите один из вариантов ниже', reply_markup=await kb.get_intervals())
 
 
-@router.message(AdminCommandFilter(), Form.excursion_choice_date_from, F.text == 'Текущая неделя')
-async def current_week(message: Message, state: FSMContext):
-    await message.answer('Экскурсии текущей недели:', reply_markup=await kb.week_excursions())
-    await message.answer_dice(reply_markup=kb.only_back)
-    await state.clear()
+@router.callback_query(AdminCommandFilter(), F.data.startswith("intervals_get"))
+async def current_week(callback: CallbackQuery, state: FSMContext):
+    interval = callback.data.split("_")[2]
+    if interval == "date":
+        await callback.message.answer('Выберите дату экскурсии:',
+                                      reply_markup=await SimpleCalendar(
+                                          locale=await get_user_locale(callback.from_user)).start_calendar())
+        await state.set_state(Form.excursion_choice_date)
+    elif interval == "week":
+        await callback.message.answer('Экскурсии текущей недели:', reply_markup=await kb.week_excursions())
+    elif interval == "month":
+        await callback.message.answer('Экскурсии на месяц:', reply_markup=await kb.month_excursions())
+    elif interval == "all":
+        await callback.message.answer('Экскурсии за весь период:', reply_markup=await kb.all_excursions())
 
 
 @router.message(AdminCommandFilter(), Form.excursion_edit_property)
@@ -219,10 +256,19 @@ async def edit_chosen_property(message: Message, state: FSMContext):
     await state.clear()
 
 
-@router.message(AdminCommandFilter(), Form.excursion_choice_date_from)
-async def getting_excursion(message: Message, state: FSMContext):
-    await state.clear()
-    await message.answer("Результат:\n", reply_markup=await kb.edit_excursions(message.text))
+@router.callback_query(AdminCommandFilter(), Form.excursion_choice_date, SimpleCalendarCallback.filter())
+async def getting_excursion(callback: CallbackQuery, callback_data: CallbackData, state: FSMContext):
+    calendar = SimpleCalendar(
+        locale=await get_user_locale(callback.from_user), show_alerts=True
+    )
+    calendar.set_dates_range(datetime.datetime(2024, 1, 1), datetime.datetime(2025, 12, 31))
+    selected, date = await calendar.process_selection(callback, callback_data)
+    if selected:
+        await state.clear()
+        await callback.message.answer(
+            f'Результат (Дата: {date.strftime("%d.%m.%Y")})',
+            reply_markup=await kb.edit_excursions(date.strftime("%d.%m.%Y"))
+        )
 
 
 @router.message(Form.timetable)
@@ -265,8 +311,9 @@ async def daily_report(message: Message):
 async def weekly_report(message: Message):
     await message.answer('Отчёт за неделю:', reply_markup=kb.main_admin)
     today = datetime.datetime.today()
-    await message.answer(str(await get_report((today - datetime.timedelta(days=today.isoweekday())).strftime("%d.%m.%Y"),
-                                              (today + datetime.timedelta(days=(7 - today.isoweekday()))).strftime("%d.%m.%Y"))))
+    await message.answer(
+        str(await get_report((today - datetime.timedelta(days=today.isoweekday())).strftime("%d.%m.%Y"),
+                             (today + datetime.timedelta(days=(7 - today.isoweekday()))).strftime("%d.%m.%Y"))))
 
 
 @router.message(AdminCommandFilter(), F.text == 'Отчёт за месяц')

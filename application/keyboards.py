@@ -4,7 +4,7 @@ from aiogram.types import InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardBut
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from application.database.requests import get_excursions, get_user_excursions, get_week_excursions, get_users, get_user, \
-    get_timetable, get_excursion, get_guide_list, get_user_by_id
+    get_timetable, get_excursion, get_guide_list, get_user_by_id, get_month_excursions
 from application.utilities.tools import compare_dates, time_intersecting, compare_time
 
 main = ReplyKeyboardMarkup(keyboard=[
@@ -15,7 +15,7 @@ main = ReplyKeyboardMarkup(keyboard=[
 
 only_back = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text='Главная')]
-], resize_keyboard=True, input_field_placeholder='Выберите экскурсию или выберите пункт ниже')
+], resize_keyboard=True, input_field_placeholder='')
 
 only_back_properties = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text='Главная')]
@@ -35,7 +35,9 @@ admin_panel = ReplyKeyboardMarkup(keyboard=[
 ], resize_keyboard=True, input_field_placeholder='Выберите пункт ниже')
 
 week_panel = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text='Текущая неделя'), KeyboardButton(text='Главная')]
+    [KeyboardButton(text='Текущая неделя'), KeyboardButton(text='Текущий месяц')],
+    [KeyboardButton(text='Весь период')],
+    [KeyboardButton(text='Главная')]
 ], resize_keyboard=True, input_field_placeholder='Выберите пункт ниже или введите дату')
 
 report_intervals = ReplyKeyboardMarkup(keyboard=[
@@ -44,16 +46,30 @@ report_intervals = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text='Главная')]
 ], resize_keyboard=True, input_field_placeholder='Выберите временной интервал')
 
+
+async def get_intervals():
+    intervals_kb = InlineKeyboardBuilder()
+    intervals_kb.add(InlineKeyboardButton(text="Определённая дата", callback_data=f'intervals_get_date'))
+    intervals_kb.add(InlineKeyboardButton(text="Текущая неделя", callback_data=f'intervals_get_week'))
+    intervals_kb.add(InlineKeyboardButton(text="Текущий месяц", callback_data=f'intervals_get_month'))
+    intervals_kb.add(InlineKeyboardButton(text="Весь период", callback_data=f'intervals_get_all'))
+    return intervals_kb.adjust(1).as_markup()
+
+
 async def edit_excursions(date_from: str):
     excursions_kb = InlineKeyboardBuilder()
     excs = await get_excursions()
     excs = sorted(excs, key=lambda x: datetime.datetime.strptime(x.date + ' ' + x.time, "%d.%m.%Y %H:%M:%S"))
     for excursion in excs:
-        if datetime.datetime.strptime(date_from, "%d.%m.%Y") == datetime.datetime.strptime(excursion.date, "%d.%m.%Y"):
-            excursions_kb.add(
-                InlineKeyboardButton(text=f"{excursion.date}, {':'.join(str(excursion.time).split(':')[:2])}, "
-                                          f"{excursion.contacts}",
-                                     callback_data=f'edit_excursion_{excursion.id}'))
+        try:
+            if datetime.datetime.strptime(date_from, "%d.%m.%Y") == datetime.datetime.strptime(excursion.date,
+                                                                                               "%d.%m.%Y"):
+                excursions_kb.add(
+                    InlineKeyboardButton(text=f"{excursion.date}, {':'.join(str(excursion.time).split(':')[:2])}, "
+                                              f"{excursion.contacts}",
+                                         callback_data=f'edit_excursion_{excursion.id}'))
+        except ValueError as exception:
+            print(exception)
     excursions_kb.add(InlineKeyboardButton(text="<-", callback_data=f'return_home'))
     return excursions_kb.adjust(1).as_markup()
 
@@ -69,6 +85,7 @@ async def edit_properties(excursion_id: int):
         properties_kb.add(InlineKeyboardButton(text=f"{properties[i]}",
                                                callback_data=f'edit_properties_{excursion_id}_{properties_callback[i]}'))
 
+    properties_kb.add(InlineKeyboardButton(text="Удалить", callback_data=f"remove_confirmation_{excursion_id}"))
     properties_kb.add(InlineKeyboardButton(text="<-", callback_data=f'return_home'))
 
     return properties_kb.adjust(2).as_markup()
@@ -128,14 +145,39 @@ async def week_excursions():
     return excursions_kb.adjust(1).as_markup()
 
 
+async def month_excursions():
+    excursions_kb = InlineKeyboardBuilder()
+    excs = await get_month_excursions()
+    excs = sorted(excs, key=lambda x: datetime.datetime.strptime(x.date + ' ' + x.time, "%d.%m.%Y %H:%M:%S"))
+    for excursion in excs:
+        excursions_kb.add(
+            InlineKeyboardButton(text=f"{excursion.date}, {':'.join(str(excursion.time).split(':')[:2])}, "
+                                      f"{excursion.contacts}",
+                                 callback_data=f'edit_excursion_{excursion.id}'))
+    return excursions_kb.adjust(1).as_markup()
+
+
+async def all_excursions():
+    excursions_kb = InlineKeyboardBuilder()
+    excs = await get_excursions()
+    excs = sorted(excs, key=lambda x: datetime.datetime.strptime(x.date + ' ' + x.time, "%d.%m.%Y %H:%M:%S"))
+    for excursion in excs:
+        excursions_kb.add(
+            InlineKeyboardButton(text=f"{excursion.date}, {':'.join(str(excursion.time).split(':')[:2])}, "
+                                      f"{excursion.contacts}",
+                                 callback_data=f'edit_excursion_{excursion.id}'))
+    return excursions_kb.adjust(2).as_markup()
+
+
 async def appointed_guides(excursion_id: int):
     guides_kb = InlineKeyboardBuilder()
     guides = await get_guide_list(excursion_id)
 
-    for guide_id in guides:
-        user = await get_user_by_id(guide_id)
-        guides_kb.add(InlineKeyboardButton(text=f"{user.name}",
-                                           callback_data=f'appoint_excursion_{excursion_id}_{user.id}'))
+    if guides:
+        for guide_id in guides:
+            user = await get_user_by_id(guide_id)
+            guides_kb.add(InlineKeyboardButton(text=f"{user.name}",
+                                               callback_data=f'appoint_excursion_{excursion_id}_{user.id}'))
 
     guides_kb.add(InlineKeyboardButton(text="<-", callback_data=f'return_home'))
     return guides_kb.adjust(1).as_markup()
@@ -169,7 +211,10 @@ async def free_guides(excursion_id: int, disappoint_guide_id=-1):
                 for time_interval in time:
                     start, end = time_interval.split('-')
 
-                    excursion_time2 = (datetime.datetime.strptime(excursion.time, "%H:%M:%S") + datetime.timedelta(hours=1, minutes=30)).strftime("%H:%M:%S")
+                    excursion_time2 = (
+                            datetime.datetime.strptime(excursion.time, "%H:%M:%S") + datetime.timedelta(hours=1,
+                                                                                                        minutes=30)).strftime(
+                        "%H:%M:%S")
                     if compare_time(excursion.time, start) and compare_time(end, excursion_time2):
                         guides_kb.add(InlineKeyboardButton(text=f"{temp.name}",
                                                            callback_data=f'2_appoint_excursion_{temp.id}_{disappoint_guide_id}_{excursion_id}'))
@@ -188,3 +233,11 @@ async def timetables_choice():
                                               callback_data=f'timetable_{temp.id}'))
     timetable_kb.add(InlineKeyboardButton(text="<-", callback_data=f'return_home'))
     return timetable_kb.adjust(2).as_markup()
+
+
+def remove_confirm(excursion_id: int):
+    confirmation_kb = InlineKeyboardBuilder()
+    confirmation_kb.add(InlineKeyboardButton(text="Подтвердить", callback_data=f'remove_excursion_{excursion_id}'))
+    confirmation_kb.add(InlineKeyboardButton(text="Отменить", callback_data=f'return_home'))
+
+    return confirmation_kb.adjust(2).as_markup()
