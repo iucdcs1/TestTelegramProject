@@ -134,20 +134,27 @@ async def reload_excursions() -> None:
             query_result = await session.scalar(select(Excursion)
                                                 .where(Excursion.date == exc.date)
                                                 .where(Excursion.time == exc.time)
-                                                .where(Excursion.people == exc.people)
+                                                .where(Excursion.people_discount == exc.people_discount)
+                                                .where(Excursion.people_full == exc.people_full)
                                                 .where(Excursion.contacts == exc.contacts))
             if not query_result:
                 query = insert(Excursion).values(
                     date=exc.date,
                     time=exc.time,
-                    people=exc.people,
+                    people_full=exc.people_full,
+                    people_discount=exc.people_discount,
+                    people_free=exc.people_free,
                     contacts=exc.contacts,
                     additional_info=exc.additional_info,
-                    eat=exc.eat,
+                    eat1_type=exc.eat1_type,
+                    eat1_amount=exc.eat1_amount,
+                    eat2_type=exc.eat2_type,
+                    eat2_amount=exc.eat2_amount,
                     mk=exc.mk,
                     from_place=exc.from_place,
                     university=exc.university,
-                    money=exc.money
+                    money=exc.money,
+                    is_group=exc.is_group
                 )
                 await session.execute(query)
                 await session.commit()
@@ -173,35 +180,52 @@ async def remove_excursion(excursion_id: int, finished: bool) -> None:
             await session.execute((insert(ExcursionReport).values(
                 time=excursion_info.time,
                 date=excursion_info.date,
-                people=excursion_info.people,
+                people_free=excursion_info.people_free,
+                people_discount=excursion_info.people_discount,
+                people_full=excursion_info.people_full,
                 university=excursion_info.university,
                 contacts=excursion_info.contacts,
                 money=excursion_info.money,
-                eat=excursion_info.eat,
+                eat1_type=excursion_info.eat1_type,
+                eat1_amount=excursion_info.eat1_amount,
+                eat2_type=excursion_info.eat2_type,
+                eat2_amount=excursion_info.eat2_amount,
                 mk=excursion_info.mk,
                 transfer=excursion_info.transfer,
                 additional_info=excursion_info.additional_info,
+                is_group=excursion_info.is_group,
                 finished=finished
             )))
         await session.execute(query)
         await session.commit()
 
 
-async def add_excursion(excursion: Exc) -> bool:
+async def add_excursion(exc: Exc) -> bool:
     async with async_session() as session:
         query_result = await session.scalar(select(Excursion)
-                                            .where(Excursion.date == excursion.date)
-                                            .where(Excursion.time == excursion.time)
-                                            .where(Excursion.people == excursion.people)
-                                            .where(Excursion.contacts == excursion.contacts))
+                                            .where(Excursion.date == exc.date)
+                                            .where(Excursion.time == exc.time)
+                                            .where(Excursion.people_discount == exc.people_discount)
+                                            .where(Excursion.people_full == exc.people_full)
+                                            .where(Excursion.contacts == exc.contacts))
         if not query_result:
             query = insert(Excursion).values(
-                date=excursion.date,
-                time=excursion.time,
-                people=excursion.people,
-                contacts=excursion.contacts,
-                additional_info=excursion.additional_info,
-                eat=excursion.eat
+                date=exc.date,
+                time=exc.time,
+                people_full=exc.people_full,
+                people_discount=exc.people_discount,
+                people_free=exc.people_free,
+                contacts=exc.contacts,
+                additional_info=exc.additional_info,
+                eat1_type=exc.eat1_type,
+                eat1_amount=exc.eat1_amount,
+                eat2_type=exc.eat2_type,
+                eat2_amount=exc.eat2_amount,
+                mk=exc.mk,
+                from_place=exc.from_place,
+                university=exc.university,
+                money=exc.money,
+                is_group=exc.is_group
             )
             await session.execute(query)
             await session.commit()
