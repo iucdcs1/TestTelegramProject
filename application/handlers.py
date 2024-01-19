@@ -12,11 +12,11 @@ from aiogram_calendar import SimpleCalendarCallback, SimpleCalendar, get_user_lo
 import application.keyboards as kb
 from application.FSM import Form
 from application.database.requests import get_user, get_user_statistics, is_admin, reload_excursions, get_excursion, \
-    remove_excursion, get_admins, get_user_by_id, add_guide, add_timetable, get_timetable, get_food, change_date, \
+    remove_excursion, get_admins, get_user_by_id, add_guide, add_timetable, get_timetable, change_date, \
     change_time, change_people, change_from_place, change_university, change_contacts, change_money, change_eat, \
-    change_mk, change_additional_info, get_guide_list, remove_guide, get_report, add_user
+    change_mk, change_additional_info, get_guide_list, remove_guide, get_report, add_user, update_food, recalculate_cost
 from application.filters import UnknownCommandFilter, AdminCommandFilter
-from application.utilities.tools import check_timetable
+from application.utilities.tools import check_timetable, notify_guides
 
 router = Router()
 
@@ -71,6 +71,10 @@ async def user_excursion_selected(callback: CallbackQuery):
     excursion_info = await get_excursion(excursion_id)
     guide_id = (await get_user(callback.from_user.id)).id
 
+    message_food = f'\n{excursion_info.eat1_type}: {excursion_info.eat1_amount} чел.\n{excursion_info.eat2_type}: {excursion_info.eat2_amount} чел.'
+    if excursion_info.eat1_amount <= excursion_info.eat2_amount <= 0:
+        message_food = 'отсутствует'
+
     if await get_guide_list(excursion_id) is not None:
         guides = [(await get_user_by_id(int(idx))) for idx in await get_guide_list(excursion_id)]
     else:
@@ -78,12 +82,12 @@ async def user_excursion_selected(callback: CallbackQuery):
     message = f"Информация по выбранной экскурсии ({excursion_id}):\n" \
               f"Время: {excursion_info.date}, {':'.join(str(excursion_info.time).split(':')[:2])}\n" \
               f"Напарники: {', '.join([x.name for x in guides if x.name != (await get_user_by_id(guide_id)).name]) if len(guides) > 1 else 'Отсутствуют'}\n"
-    message += f"Количество человек: {excursion_info.people}\n" \
+    message += f"Количество человек: {excursion_info.people_full + excursion_info.people_discount + excursion_info.people_free}\n" \
                f"Старт: {excursion_info.from_place}\n" \
                f"Университет: {'+' if excursion_info.university == 1 else '-'}\n" \
                f"Контакт: {excursion_info.contacts}\n" \
                f"МК: {excursion_info.mk}\n" \
-               f"Питание: {(await get_food(excursion_info.eat)).place if excursion_info.eat != 0 else 'Нет'}\n" \
+               f"------------------------------\nПитание: {message_food}\n------------------------------\n" \
                f"Доп. Информация: {excursion_info.additional_info if excursion_info.additional_info != '-' else 'Отсутствует'}"
 
     await callback.message.answer(message, reply_markup=await kb.finish_excursion(excursion_id))
@@ -145,7 +149,7 @@ async def finish_selected_excursion(callback: CallbackQuery):
         for admin in await get_admins():
             message = f"Экскурсия на {'.'.join(str(exc.time).split(':')[:2])} завершена! (ID={exc.id})\n" \
                       f"Гиды: {', '.join([x.name for x in guides])}\n" \
-                      f"Количество человек: {exc.people}\n" \
+                      f"Количество человек: {(exc.people_discount + exc.people_full + exc.people_free)}\n" \
                       f"Оплата: {exc.money}"
             await notify_user(admin.telegram_id, message)
     else:
@@ -197,6 +201,10 @@ async def edit_chosen_property(message: Message, state: FSMContext):
         pattern = re.compile("\d{2}.\d{2}.\d{4}")
         if re.match(pattern, message.text):
             await change_date(excursion_id, message.text)
+            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+                         f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
+                         f"была изменена!"
+            await notify_guides(excursion_id, guides_msg)
             await message.answer(f'Изменение внесено!', reply_markup=kb.admin_panel)
         else:
             await message.answer("Неверный формат", reply_markup=kb.admin_panel)
@@ -204,19 +212,20 @@ async def edit_chosen_property(message: Message, state: FSMContext):
         pattern = re.compile("\d{2}:\d{2}")
         if re.match(pattern, message.text):
             await change_time(excursion_id, message.text)
-            await message.answer(f'Изменение внесено!', reply_markup=kb.admin_panel)
-        else:
-            await message.answer("Неверный формат", reply_markup=kb.admin_panel)
-    elif excursion_property == "people":
-        pattern = re.compile('\d{1,2}')
-        if re.match(pattern, message.text):
-            await change_people(excursion_id, message.text)
+            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+                         f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
+                         f"была изменена!"
+            await notify_guides(excursion_id, guides_msg)
             await message.answer(f'Изменение внесено!', reply_markup=kb.admin_panel)
         else:
             await message.answer("Неверный формат", reply_markup=kb.admin_panel)
     elif excursion_property == "fromplace":
         if message.text in ["Университет", "ОЭЗ", "Артспейс"]:
             await change_from_place(excursion_id, message.text)
+            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+                         f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
+                         f"была изменена!"
+            await notify_guides(excursion_id, guides_msg)
             await message.answer(f'Изменение внесено!', reply_markup=kb.admin_panel)
         else:
             await message.answer("Неверный формат, варианты: Университет, ОЭЗ, Артспейс", reply_markup=kb.admin_panel)
@@ -224,6 +233,10 @@ async def edit_chosen_property(message: Message, state: FSMContext):
         pattern = re.compile('^((8|\+7)[\- ]?)?(\(?\d{3}\)?[\- ]?)?[\d\- ]{7,10}$')
         if re.match(pattern, message.text.split(', ')[0]) and len(message.text.split(', ')) == 2:
             await change_contacts(excursion_id, message.text)
+            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+                         f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
+                         f"была изменена!"
+            await notify_guides(excursion_id, guides_msg)
             await message.answer(f'Изменение внесено!', reply_markup=kb.admin_panel)
         else:
             await message.answer("Неверный формат, пример: +71234567890, Имя", reply_markup=kb.admin_panel)
@@ -231,12 +244,20 @@ async def edit_chosen_property(message: Message, state: FSMContext):
         pattern = re.compile('[0-9]+')
         if re.match(pattern, message.text):
             await change_money(excursion_id, int(message.text))
+            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+                         f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
+                         f"была изменена!"
+            await notify_guides(excursion_id, guides_msg)
             await message.answer(f'Изменение внесено!', reply_markup=kb.admin_panel)
         else:
             await message.answer("Неверный формат", reply_markup=kb.admin_panel)
     elif excursion_property == "eat":
         if message.text in ["0", "1", "2", "3"]:
             await change_eat(excursion_id, int(message.text))
+            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+                         f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
+                         f"была изменена!"
+            await notify_guides(excursion_id, guides_msg)
             await message.answer(f'Изменение внесено!', reply_markup=kb.admin_panel)
         else:
             await message.answer("Неверный формат, варианты: (0, 1, 2, 3)", reply_markup=kb.admin_panel)
@@ -244,6 +265,10 @@ async def edit_chosen_property(message: Message, state: FSMContext):
         if message.text in ["Чат-бот", "Графический дизайн", "Интернет вещей", "Робототехника", "Оригаметрия", "ИЗО",
                             "Нет"]:
             await change_mk(excursion_id, message.text)
+            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+                         f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
+                         f"была изменена!"
+            await notify_guides(excursion_id, guides_msg)
             await message.answer(f'Изменение внесено!', reply_markup=kb.admin_panel)
         else:
             await message.answer(
@@ -251,6 +276,10 @@ async def edit_chosen_property(message: Message, state: FSMContext):
                 reply_markup=kb.admin_panel)
     elif excursion_property == "additionalinfo":
         await change_additional_info(excursion_id, message.text)
+        guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+                     f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
+                     f"была изменена!"
+        await notify_guides(excursion_id, guides_msg)
         await message.answer(f'Изменение внесено!', reply_markup=kb.admin_panel)
 
     await state.clear()
@@ -407,7 +436,7 @@ async def appoint_excursion_final(callback: CallbackQuery):
 
     message = f"Вам назначена экскурсия ({excursion_id}):\n" \
               f"Время: {excursion_info.date}, {':'.join(str(excursion_info.time).split(':')[:2])}\n" \
-              f"Количество человек: {excursion_info.people}\n" \
+              f"Количество человек: {excursion_info.people_discount + excursion_info.people_full + excursion_info.people_free}\n" \
               f"Место: {excursion_info.from_place}\n" \
               f"Университет: {'+' if excursion_info.university == 1 else '-'}\n" \
               f"Контакт: {excursion_info.contacts}\n" \
@@ -462,6 +491,9 @@ async def excursion_selected(callback: CallbackQuery):
     excursion_id = int(callback.data.split('_')[2])
     excursion_info = await get_excursion(excursion_id)
 
+    message_food = f'\n{excursion_info.eat1_type}: {excursion_info.eat1_amount} чел.\n{excursion_info.eat2_type}: {excursion_info.eat2_amount} чел.'
+    if excursion_info.eat1_amount <= excursion_info.eat2_amount <= 0:
+        message_food = 'отсутствует'
     if await get_guide_list(excursion_id) is not None:
         guides = [(await get_user_by_id(int(idx))) for idx in await get_guide_list(excursion_id)]
     else:
@@ -469,17 +501,116 @@ async def excursion_selected(callback: CallbackQuery):
     message = f"Информация по выбранной экскурсии ({excursion_id}):\n" \
               f"Время: {excursion_info.date}, {':'.join(str(excursion_info.time).split(':')[:2])}\n" \
               f"Гиды: {', '.join([x.name for x in guides]) if guides != [] else 'Отсутствуют'}\n"
-    message += f"Количество человек: {excursion_info.people}\n" \
+    message += f"Количество человек: {excursion_info.people_free + excursion_info.people_discount + excursion_info.people_full}\n" \
                f"Старт: {excursion_info.from_place}\n" \
                f"Университет: {'+' if excursion_info.university == 1 else '-'}\n" \
                f"Контакт: {excursion_info.contacts}\n" \
                f"МК: {excursion_info.mk}\n" \
-               f"Питание: {(await get_food(excursion_info.eat)).place if excursion_info.eat != 0 else 'Нет'}\n" \
+               f"------------------------------\nПитание: {message_food}\n------------------------------\n" \
                f"Стоимость: {excursion_info.money}\n" \
                f"Доп. Информация: {excursion_info.additional_info if excursion_info.additional_info != '-' else 'Отсутствует'}\n\n" \
                f"Что нужно изменить?"
 
     await callback.message.answer(message, reply_markup=await kb.edit_properties(excursion_id))
+
+
+@router.callback_query(AdminCommandFilter(), F.data.startswith('people_edit'))
+async def edit_people(callback: CallbackQuery, state: FSMContext):
+    excursion_id = int(callback.data.split('_')[2])
+    people_type = callback.data.split('_')[3]
+
+    await state.set_state(Form.excursion_people_edit)
+    await state.update_data(excursion_id=excursion_id, people_type=people_type)
+    if people_type == 'free':
+        await callback.message.answer(
+            f'Введите новое количество гостей вместо текущего (Бесплатно: {(await get_excursion(excursion_id)).people_free})',
+            reply_markup=kb.only_back_properties)
+    elif people_type == 'discount':
+        await callback.message.answer(
+            f'Введите новое количество гостей вместо текущего (Льготных: {(await get_excursion(excursion_id)).people_discount})',
+            reply_markup=kb.only_back_properties)
+    else:
+        await callback.message.answer(
+            f'Введите новое количество гостей вместо текущего (Без льгот: {(await get_excursion(excursion_id)).people_full})',
+            reply_markup=kb.only_back_properties)
+
+
+@router.message(Form.excursion_people_edit)
+async def edit_people_final(message: Message, state: FSMContext):
+    import re
+
+    data = await state.get_data()
+    excursion_id = data['excursion_id']
+    people_type = data["people_type"]
+    await state.clear()
+
+    pattern = re.compile('\d{1,2}')
+    if re.match(pattern, message.text):
+        await change_people(excursion_id, people_type, message.text)
+        guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+                     f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
+                     f"была изменена!"
+        await notify_guides(excursion_id, guides_msg)
+        await message.answer(f'Изменение внесено!', reply_markup=kb.admin_panel)
+        await recalculate_cost(excursion_id)
+    else:
+        await message.answer("Неверный формат", reply_markup=kb.admin_panel)
+
+
+@router.callback_query(AdminCommandFilter(), F.data.startswith("food1_edit"))
+async def set_food_complex(callback: CallbackQuery):
+    data = callback.data.split("_")
+    excursion_id = int(data[2])
+    complex_number = int(data[3])
+    await callback.message.edit_text("Выберите новый тип комплекса:",
+                                     reply_markup=kb.food_types(excursion_id, complex_number))
+
+
+@router.message(AdminCommandFilter(), Form.excursion_food_name)
+async def set_food_name(message: Message, state: FSMContext):
+    data = await state.get_data()
+    await state.set_state(Form.excursion_food_amount)
+    excursion_id = data['excursion_id']
+    complex_number = data["complex_number"]
+    type_number = message.text
+    await state.update_data(excursion_id=excursion_id, complex_number=complex_number, type_number=type_number)
+    await message.answer("Введите количество человек",
+                                  reply_markup=kb.only_back)
+
+
+@router.callback_query(AdminCommandFilter(), F.data.startswith("food2_edit"))
+async def set_food_amount(callback: CallbackQuery, state: FSMContext):
+    data = callback.data.split("_")
+    excursion_id = int(data[2])
+    complex_number = int(data[3])
+    type_number = data[4]
+    if type_number == '4':
+        await state.set_state(Form.excursion_food_name)
+        await state.update_data(excursion_id=excursion_id, complex_number=complex_number, type_number=type_number)
+        await callback.message.answer("Введите название комплекса",
+                                      reply_markup=kb.only_back)
+    else:
+        await state.set_state(Form.excursion_food_amount)
+        await state.update_data(excursion_id=excursion_id, complex_number=complex_number, type_number=type_number)
+        await callback.message.answer("Введите количество человек",
+                                         reply_markup=kb.only_back)
+
+
+@router.message(AdminCommandFilter(), Form.excursion_food_amount)
+async def finish_food(message: Message, state: FSMContext):
+    data = await state.get_data()
+    await state.clear()
+    excursion_id = data['excursion_id']
+    complex_number = data["complex_number"]
+    type_number = data["type_number"]
+    new_amount = int(message.text)
+
+    await update_food(excursion_id, complex_number, type_number, new_amount)
+    await message.answer("Изменение внесено!", reply_markup=kb.main_admin)
+    guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+                 f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
+                 f"была изменена!"
+    await notify_guides(excursion_id, guides_msg)
 
 
 @router.callback_query(AdminCommandFilter(), F.data.startswith('edit_properties_'))
@@ -497,9 +628,9 @@ async def excursion_properties_edit(callback: CallbackQuery, state: FSMContext):
         await callback.message.answer(
             f'Введите новое время вместо текущего ({temp})', reply_markup=kb.only_back_properties)
     elif excursion_property == 'people':
+        await state.clear()
         await callback.message.answer(
-            f'Введите новое количество гостей вместо текущего ({(await get_excursion(excursion_id)).people})',
-            reply_markup=kb.only_back_properties)
+            f'Выберите тип гостей: ', reply_markup=kb.people_types(excursion_id))
     elif excursion_property == 'fromplace':
         await callback.message.answer(
             f'Введите новое место встречи вместо текущего ({(await get_excursion(excursion_id)).from_place})',
@@ -522,9 +653,10 @@ async def excursion_properties_edit(callback: CallbackQuery, state: FSMContext):
             f'Выберите какого экскурсовода заменить:',
             reply_markup=await kb.appointed_guides(excursion_id))
     elif excursion_property == 'eat':
+        await state.clear()
         await callback.message.answer(
-            f'Введите новое место вместо текущего ({(await get_excursion(excursion_id)).eat})',
-            reply_markup=kb.only_back_properties)
+            f'Выберите номер комплекса, который хотите изменить',
+            reply_markup=kb.set_complex_number(excursion_id))
     elif excursion_property == 'mk':
         await callback.message.answer(
             f'Введите новый мастер-класс вместо текущего ({(await get_excursion(excursion_id)).mk})',
@@ -532,6 +664,10 @@ async def excursion_properties_edit(callback: CallbackQuery, state: FSMContext):
     elif excursion_property == 'university':
         await state.clear()
         await change_university(excursion_id)
+        guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+                     f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
+                     f"была изменена!"
+        await notify_guides(excursion_id, guides_msg)
         await callback.message.answer(f'Изменение внесено!', reply_markup=kb.admin_panel)
 
 

@@ -77,14 +77,6 @@ class ExcursionReport(Base):
     finished: Mapped[bool] = mapped_column(BOOLEAN, nullable=True)
 
 
-class Food(Base):
-    __tablename__ = "foods"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    place: Mapped[str] = mapped_column()
-    type: Mapped[str] = mapped_column()
-
-
 class Statistic(Base):
     __tablename__ = "statistics"
 

@@ -32,8 +32,10 @@ class Excursion:
 
 
 class Report:
-    def __init__(self, people, university_people, money, eats, mks, transfers):
-        self.people = people
+    def __init__(self, people_free, people_discount, people_full, university_people, money, eats, mks, transfers):
+        self.people_free = people_free
+        self.people_full = people_full
+        self.people_discount = people_discount
         self.university_people = university_people
         self.money = money
         self.eats = eats
@@ -50,7 +52,7 @@ class Report:
             mks_message += f"{str(unique_type)}: " + str(self.mks.count(unique_type)) + "\n"
 
         return f"Количество человек, посетивших университет: {self.university_people}\n" \
-               f"Количество человек, посетивших ОЭЗ: {self.people}\n" \
+               f"Количество человек, посетивших ОЭЗ: {(self.people_full + self.people_discount + self.people_free)}\n" \
                f"Количество проведённых мастер-классов: {len(self.mks)}\n" \
                f"Количество трансферов: {self.transfers}\n" \
                f"Оплата за экскурсии: {self.money}\n\n" \
@@ -69,16 +71,19 @@ async def parseRow(row: [str]) -> Excursion:
 
     exc.time = row[4]
 
+    if len(exc.time.split(':')[0]) == 1:
+        exc.time = '0' + exc.time
+
     exc.people_free = int(row[5])
 
     exc.contacts = row[6] + ", " + row[2]
 
     exc.eat1_type = row[7]
 
-    if row[8] == 'Не нужен':
+    if row[8].lower() == 'нет':
         exc.transfer = False
     else:
-        exc.time = True
+        exc.transfer = True
 
     try:
         if row[9]:
@@ -97,17 +102,17 @@ async def parseRow(row: [str]) -> Excursion:
 
     exc.from_place = row[12]
 
-    exc.people_full = int(row[11])
+    exc.people_full = int(row[13])
 
-    exc.people_discount = int(row[12])
+    exc.people_discount = int(row[14])
 
-    exc.eat1_amount = int(row[13])
+    exc.eat1_amount = int(row[15])
 
-    exc.eat2_type = row[14]
+    exc.eat2_type = row[16]
 
-    exc.eat2_amount = int(row[15])
+    exc.eat2_amount = int(row[17])
 
-    if row[16] == "Да" or row[16] == "Благотворительность":
+    if row[18] == "Да" or row[18] == "Благотворительность":
         exc.is_group = True
     else:
         exc.is_group = False
@@ -124,7 +129,7 @@ async def parseRow(row: [str]) -> Excursion:
         else:
             exc.money = 2500
 
-    if row[16] == "Благотворительность":
+    if row[18] == "Благотворительность":
         exc.money = 0
 
     return exc

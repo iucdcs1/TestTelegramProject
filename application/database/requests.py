@@ -5,7 +5,7 @@ from application.utilities.tools import compare_dates, compare_dates_interval
 from sqlalchemy import select, insert, delete, update
 
 from application.api.google_sheet import get_excursions_from_sheet
-from application.database.models import User, Statistic, async_session, Excursion, Schedule, Food, ExcursionReport
+from application.database.models import User, Statistic, async_session, Excursion, Schedule, ExcursionReport
 
 from application.python_models import Excursion as Exc, Report
 
@@ -170,7 +170,7 @@ async def remove_excursion(excursion_id: int, finished: bool) -> None:
                 pass
             else:
                 for guide in guides:
-                    if excursion_info.people < 6:
+                    if (excursion_info.people_full + excursion_info.people_free + excursion_info.people_discount) < 6:
                         statement = (update(Statistic).values(amount_individuals=Statistic.amount_individuals + 1).where(
                             Statistic.user_id == int(guide)))
                     else:
@@ -288,10 +288,12 @@ async def get_timetable(guide_id: int) -> Schedule:
         return result
 
 
+'''
 async def get_food(food_id: int) -> Food:
     async with async_session() as session:
         result = await session.scalar(select(Food).where(Food.id == food_id))
         return result
+'''
 
 
 async def change_date(excursion_id: int, new_date: str):
@@ -307,9 +309,14 @@ async def change_time(excursion_id: int, new_time: str):
         await session.commit()
 
 
-async def change_people(excursion_id: int, new_people: str):
+async def change_people(excursion_id: int, people_type: str, new_people: str):
     async with async_session() as session:
-        await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(people=new_people))
+        if people_type == "free":
+            await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(people_free=new_people))
+        elif people_type == "discount":
+            await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(people_discount=new_people))
+        elif people_type == "full":
+            await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(people_full=new_people))
         await session.commit()
 
 
@@ -364,6 +371,16 @@ async def get_report_exc() -> [ExcursionReport]:
         return result
 
 
+async def update_food(excursion_id: int, complex_number: int, new_type_number: str, new_amount: int):
+    async with async_session() as session:
+        if complex_number == 1:
+            query = update(Excursion).where(Excursion.id == excursion_id).values(eat1_type=new_type_number, eat1_amount=new_amount)
+        else:
+            query = update(Excursion).where(Excursion.id == excursion_id).values(eat2_type=new_type_number, eat2_amount=new_amount)
+        await session.execute(query)
+        await session.commit()
+
+
 async def add_user(telegram_id: int, name: str, admin: bool):
     async with async_session() as session:
         temp_admin = 0
@@ -409,7 +426,9 @@ async def get_report(date_from: str, date_to: str) -> Report:
         excursions = await get_report_exc()
 
         university_people = 0
-        people = 0
+        people_free = 0
+        people_full = 0
+        people_discount = 0
         eats = []
         transfers = 0
         mks = []
@@ -419,15 +438,36 @@ async def get_report(date_from: str, date_to: str) -> Report:
             if compare_dates_interval(date_from, date_to, datetime.datetime.today().strftime("%d.%m.%Y")):
                 print(True)
                 if exc.university:
-                    university_people += exc.people
-                people += exc.people
+                    university_people += (exc.people_free + exc.people_full + exc.people_discount)
+                people_free += exc.people_free
+                people_full += exc.people_full
+                people_discount += exc.people_discount
                 if exc.eat:
-                    eats.append((await session.scalar(select(Food).where(Food.id == exc.eat))).type)
+                    pass
                 if exc.mk:
                     mks.append(exc.mk)
                 if exc.transfer:
                     transfers += 1
                 money += exc.money
 
-        return Report(people, university_people, money, eats, mks, transfers)
+        return Report(people_free, people_discount, people_full, university_people, money, eats, mks, transfers)
 
+
+async def recalculate_cost(excursion_id: int):
+    exc = await get_excursion(excursion_id)
+    temp = 0
+    if exc.is_group:
+        temp = 300 * (exc.people_discount + exc.people_full)
+    else:
+        if exc.people_discount + exc.people_full >= 10:
+            temp = 450 * exc.people_full + 400 * exc.people_discount
+        elif 6 <= exc.people_discount + exc.people_full <= 10:
+            temp = 600 * exc.people_full + 400 * exc.people_discount
+        elif 4 <= exc.people_discount + exc.people_full <= 5:
+            temp = 3000
+        else:
+            temp = 2500
+    async with async_session() as session:
+        query = update(Excursion).where(Excursion.id == excursion_id).values(money=temp)
+        await session.execute(query)
+        await session.commit()
