@@ -128,7 +128,6 @@ async def get_user_excursions(telegram_id: int) -> [Excursion]:
 
 
 async def reload_excursions() -> None:
-    from application.api.google_apis import addExcursionToCalendar
     excursions = await get_excursions_from_sheet()
     async with async_session() as session:
         for exc in excursions:
@@ -140,6 +139,7 @@ async def reload_excursions() -> None:
                                                 .where(Excursion.contacts == exc.contacts))
             if not query_result:
                 query = insert(Excursion).values(
+                    id=exc.id,
                     date=exc.date,
                     time=exc.time,
                     people_full=exc.people_full,

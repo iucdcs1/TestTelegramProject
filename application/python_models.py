@@ -74,57 +74,51 @@ class Report:
 async def parseRow(row: [str]) -> Excursion:
     exc = Excursion()
 
-    exc.id = int(row[0])
+    exc.id = int(row[18])
 
-    exc.date = row[3]
+    exc.contacts = row[8] + ", " + row[1]
 
-    exc.time = row[4]
+    exc.date = row[2]
+
+    exc.time = row[3]
 
     if len(exc.time.split(':')[0]) == 1:
         exc.time = '0' + exc.time
 
-    exc.people_free = int(row[5])
+    if row[4] == "Да" or row[4] == "Благотворительность":
+        exc.is_group = True
+    else:
+        exc.is_group = False
 
-    exc.contacts = row[6] + ", " + row[2]
+    exc.people_full = int(row[5])
+    exc.people_discount = int(row[6])
+    exc.people_free = int(row[7])
 
-    exc.eat1_type = row[7]
+    exc.from_place = row[9]
+    if row[10] == 'Да':
+        exc.university = True
+    else:
+        exc.university = False
 
-    if row[8].lower() == 'нет':
+    exc.eat1_type = row[11]
+    exc.eat1_amount = int(row[12])
+    exc.eat2_type = row[13]
+    exc.eat2_amount = int(row[14])
+
+    exc.mk = row[15]
+
+    if row[16].lower() == 'нет':
         exc.transfer = False
     else:
         exc.transfer = True
 
     try:
-        if row[9]:
-            exc.additional_info = row[9]
+        if row[17]:
+            exc.additional_info = row[17]
         else:
             exc.additional_info = "-"
     except Exception:
         exc.additional_info = "-"
-
-    exc.mk = row[10]
-
-    if row[11] == 'Да':
-        exc.university = True
-    else:
-        exc.university = False
-
-    exc.from_place = row[12]
-
-    exc.people_full = int(row[13])
-
-    exc.people_discount = int(row[14])
-
-    exc.eat1_amount = int(row[15])
-
-    exc.eat2_type = row[16]
-
-    exc.eat2_amount = int(row[17])
-
-    if row[18] == "Да" or row[18] == "Благотворительность":
-        exc.is_group = True
-    else:
-        exc.is_group = False
 
     if exc.is_group:
         exc.money = 450 * exc.people_full + 400 * exc.people_discount
@@ -138,7 +132,7 @@ async def parseRow(row: [str]) -> Excursion:
         else:
             exc.money = 2500
 
-    if row[18] == "Благотворительность":
+    if row[4] == "Благотворительность":
         exc.money = 0
 
     return exc
