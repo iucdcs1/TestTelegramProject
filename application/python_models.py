@@ -23,12 +23,21 @@ class Excursion:
         self.is_group = None
 
     def __str__(self):
-        return f"{self.id}: {self.date}, {self.time}\n" \
-               f"Amount: {self.people_free + self.people_discount + self.people_full}, Contacts: {self.contacts}\n" \
-               f"University: {self.university}, Start: {self.from_place}\n" \
-               f"Transfer: {self.transfer}, Food: {self.eat1_amount + self.eat2_amount}\n" \
-               f"MC: {self.mk}\n" \
-               f"Additional info: {self.additional_info}\n"
+        message_food = f'\n{self.eat1_type}: {self.eat1_amount} чел.\n{self.eat2_type}: {self.eat2_amount} чел.'
+        if self.eat1_amount <= self.eat2_amount <= 0:
+            message_food = 'отсутствует'
+        message = f"Информация по выбранной экскурсии ({self.id}):\n" \
+                  f"Время: {self.date}, {':'.join(str(self.time).split(':')[:2])}\n" \
+                  f"Гиды: подробности в тг-боте\n"
+        message += f"Количество человек: {self.people_free + self.people_discount + self.people_full}\n" \
+                   f"Старт: {self.from_place}\n" \
+                   f"Университет: {'+' if self.university == 1 else '-'}\n" \
+                   f"Контакт: {self.contacts}\n" \
+                   f"МК: {self.mk}\n" \
+                   f"------------------------------\nПитание: {message_food}\n------------------------------\n" \
+                   f"Стоимость: {self.money}\n" \
+                   f"Доп. Информация: {self.additional_info if self.additional_info != '-' else 'Отсутствует'}\n\n"
+        return message
 
 
 class Report:
@@ -118,13 +127,13 @@ async def parseRow(row: [str]) -> Excursion:
         exc.is_group = False
 
     if exc.is_group:
-        exc.money = 300 * (exc.people_discount + exc.people_full)
+        exc.money = 450 * exc.people_full + 400 * exc.people_discount
     else:
-        if exc.people_discount + exc.people_full >= 10:
+        if exc.people_discount + exc.people_full + exc.people_free >= 10:
             exc.money = 450 * exc.people_full + 400 * exc.people_discount
-        elif 6 <= exc.people_discount + exc.people_full <= 10:
-            exc.money = 600 * exc.people_full + 400 * exc.people_discount
-        elif 4 <= exc.people_discount + exc.people_full <= 5:
+        elif 6 <= exc.people_discount + exc.people_full + exc.people_free <= 9:
+            exc.money = 600 * exc.people_full + 500 * exc.people_discount
+        elif 3 <= exc.people_discount + exc.people_full + exc.people_free <= 5:
             exc.money = 3000
         else:
             exc.money = 2500

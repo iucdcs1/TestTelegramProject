@@ -1,7 +1,7 @@
 import datetime as dt
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from application.api.google_sheet import remove_past_excursions
+from application.api.google_apis import remove_past_excursions
 from application.database.requests import get_users, get_user, get_user_excursions, get_timetable, get_guide_list
 
 

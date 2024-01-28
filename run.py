@@ -6,7 +6,7 @@ import sys
 from aiogram import Dispatcher, Bot
 from dotenv import load_dotenv
 
-from application.api.google_sheet import authenticate
+from application.api.google_apis import authenticate, getCalendarItems, remove_past_excursions
 from application.database.models import async_main
 from application.database.requests import get_users
 from application.handlers import router
@@ -35,6 +35,9 @@ async def main() -> None:
     await bot.delete_webhook(drop_pending_updates=True)
 
     scheduler = await setup_scheduler()
+
+    await remove_past_excursions()
+
     try:
         scheduler.start()
         await dp.start_polling(bot)

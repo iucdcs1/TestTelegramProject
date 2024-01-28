@@ -11,6 +11,7 @@ from aiogram_calendar import SimpleCalendarCallback, SimpleCalendar, get_user_lo
 
 import application.keyboards as kb
 from application.FSM import Form
+from application.api.google_apis import editCalendarEvent
 from application.database.requests import get_user, get_user_statistics, is_admin, reload_excursions, get_excursion, \
     remove_excursion, get_admins, get_user_by_id, add_guide, add_timetable, get_timetable, change_date, \
     change_time, change_people, change_from_place, change_university, change_contacts, change_money, change_eat, \
@@ -303,9 +304,9 @@ async def getting_excursion(callback: CallbackQuery, callback_data: CallbackData
 @router.message(Form.timetable)
 async def save_timetable(message: Message, state: FSMContext):
     await state.clear()
-
-    if check_timetable(message.text):
-        await add_timetable((await get_user(message.from_user.id)).id, message.text)
+    text = message.text[:4] + message.text[4:].replace('.', ':')
+    if check_timetable(text):
+        await add_timetable((await get_user(message.from_user.id)).id, text)
         if await is_admin(message.from_user.id):
             await message.answer("Расписание успешно обновлено!", reply_markup=kb.main_admin)
         else:
@@ -380,7 +381,7 @@ async def set_timetable(message: Message, state: FSMContext):
     await message.answer('Введите ваше расписание на текущую неделю в следующем формате (пример):')
     await message.answer(f'ПН: -\n'
                          f'ВТ: +\n'
-                         f'СР: 09.00-11:00; 12:00-13:30; 15:00-17:00\n'
+                         f'СР: 09:00-11:00; 12:00-13:30; 15:00-17:00\n'
                          f'ЧТ: 08:30-11:30; 13:00-14:45\n'
                          f'ПТ: +\n'
                          f'СБ: 08:00-12:00; 14:00-16:30\n'

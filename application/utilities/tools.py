@@ -102,6 +102,9 @@ async def notify_guides(excursion_id: int, message: str):
     from application.database.requests import get_guide_list, get_user_by_id
     from run import notify_user
 
-    for guide_id in (await get_guide_list(excursion_id)):
-        telegram_id = (await get_user_by_id(int(guide_id))).telegram_id
-        await notify_user(telegram_id, message)
+    guide_list = await get_guide_list(excursion_id)
+
+    if guide_list:
+        for guide_id in guide_list:
+            telegram_id = (await get_user_by_id(int(guide_id))).telegram_id
+            await notify_user(telegram_id, message)

@@ -4,7 +4,7 @@ from application.utilities.tools import compare_dates, compare_dates_interval
 
 from sqlalchemy import select, insert, delete, update
 
-from application.api.google_sheet import get_excursions_from_sheet
+from application.api.google_apis import get_excursions_from_sheet, remove_past_excursions, editCalendarEvent
 from application.database.models import User, Statistic, async_session, Excursion, Schedule, ExcursionReport
 
 from application.python_models import Excursion as Exc, Report
@@ -128,6 +128,7 @@ async def get_user_excursions(telegram_id: int) -> [Excursion]:
 
 
 async def reload_excursions() -> None:
+    from application.api.google_apis import addExcursionToCalendar
     excursions = await get_excursions_from_sheet()
     async with async_session() as session:
         for exc in excursions:
@@ -159,12 +160,17 @@ async def reload_excursions() -> None:
                 await session.execute(query)
                 await session.commit()
 
+    await remove_past_excursions()
+
 
 async def remove_excursion(excursion_id: int, finished: bool) -> None:
+    from application.api.google_apis import remove_calendar_excursion
+
     async with async_session() as session:
+        excursion_info = await get_excursion(excursion_id)
+        await remove_calendar_excursion(excursion_info)
         query = (delete(Excursion).where(Excursion.id == excursion_id))
         if finished:
-            excursion_info = await get_excursion(excursion_id)
             guides = await get_guide_list(excursion_id)
             if guides is None:
                 pass
@@ -301,12 +307,18 @@ async def change_date(excursion_id: int, new_date: str):
         await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(date=new_date))
         await session.commit()
 
+        exc = await get_excursion(excursion_id)
+        await editCalendarEvent(exc)
+
 
 async def change_time(excursion_id: int, new_time: str):
     async with async_session() as session:
         new_time += ":00"
         await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(time=new_time))
         await session.commit()
+
+        exc = await get_excursion(excursion_id)
+        await editCalendarEvent(exc)
 
 
 async def change_people(excursion_id: int, people_type: str, new_people: str):
@@ -318,42 +330,56 @@ async def change_people(excursion_id: int, people_type: str, new_people: str):
         elif people_type == "full":
             await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(people_full=new_people))
         await session.commit()
+        exc = await get_excursion(excursion_id)
+        await editCalendarEvent(exc)
 
 
 async def change_contacts(excursion_id: int, new_contacts: str):
     async with async_session() as session:
         await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(contacts=new_contacts))
         await session.commit()
+        exc = await get_excursion(excursion_id)
+        await editCalendarEvent(exc)
 
 
 async def change_from_place(excursion_id: int, new_from_place: str):
     async with async_session() as session:
         await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(from_place=new_from_place))
         await session.commit()
+        exc = await get_excursion(excursion_id)
+        await editCalendarEvent(exc)
 
 
 async def change_money(excursion_id: int, new_money: int):
     async with async_session() as session:
         await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(money=new_money))
         await session.commit()
+        exc = await get_excursion(excursion_id)
+        await editCalendarEvent(exc)
 
 
 async def change_eat(excursion_id: int, new_eat: int):
     async with async_session() as session:
         await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(eat=new_eat))
         await session.commit()
+        exc = await get_excursion(excursion_id)
+        await editCalendarEvent(exc)
 
 
 async def change_additional_info(excursion_id: int, new_additional_info: str):
     async with async_session() as session:
         await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(additional_info=new_additional_info))
         await session.commit()
+        exc = await get_excursion(excursion_id)
+        await editCalendarEvent(exc)
 
 
 async def change_mk(excursion_id: int, new_mk: str):
     async with async_session() as session:
         await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(mk=new_mk))
         await session.commit()
+        exc = await get_excursion(excursion_id)
+        await editCalendarEvent(exc)
 
 
 async def change_university(excursion_id: int):
@@ -363,6 +389,8 @@ async def change_university(excursion_id: int):
         else:
             await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(university=True))
         await session.commit()
+        exc = await get_excursion(excursion_id)
+        await editCalendarEvent(exc)
 
 
 async def get_report_exc() -> [ExcursionReport]:
@@ -379,6 +407,8 @@ async def update_food(excursion_id: int, complex_number: int, new_type_number: s
             query = update(Excursion).where(Excursion.id == excursion_id).values(eat2_type=new_type_number, eat2_amount=new_amount)
         await session.execute(query)
         await session.commit()
+        exc = await get_excursion(excursion_id)
+        await editCalendarEvent(exc)
 
 
 async def add_user(telegram_id: int, name: str, admin: bool):
@@ -456,18 +486,23 @@ async def get_report(date_from: str, date_to: str) -> Report:
 async def recalculate_cost(excursion_id: int):
     exc = await get_excursion(excursion_id)
     temp = 0
-    if exc.is_group:
-        temp = 300 * (exc.people_discount + exc.people_full)
+    if exc.money == 0:
+        pass
     else:
-        if exc.people_discount + exc.people_full >= 10:
-            temp = 450 * exc.people_full + 400 * exc.people_discount
-        elif 6 <= exc.people_discount + exc.people_full <= 10:
-            temp = 600 * exc.people_full + 400 * exc.people_discount
-        elif 4 <= exc.people_discount + exc.people_full <= 5:
-            temp = 3000
+        if exc.is_group:
+            exc.money = 450 * exc.people_full + 400 * exc.people_discount
         else:
-            temp = 2500
-    async with async_session() as session:
-        query = update(Excursion).where(Excursion.id == excursion_id).values(money=temp)
-        await session.execute(query)
-        await session.commit()
+            if exc.people_discount + exc.people_full + exc.people_free >= 10:
+                exc.money = 450 * exc.people_full + 400 * exc.people_discount
+            elif 6 <= exc.people_discount + exc.people_full + exc.people_free <= 9:
+                exc.money = 600 * exc.people_full + 500 * exc.people_discount
+            elif 3 <= exc.people_discount + exc.people_full + exc.people_free <= 5:
+                exc.money = 3000
+            else:
+                exc.money = 2500
+        async with async_session() as session:
+            query = update(Excursion).where(Excursion.id == excursion_id).values(money=temp)
+            await session.execute(query)
+            await session.commit()
+            exc = await get_excursion(excursion_id)
+            await editCalendarEvent(exc)
