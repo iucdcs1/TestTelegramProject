@@ -6,7 +6,7 @@ import sys
 from aiogram import Dispatcher, Bot
 from dotenv import load_dotenv
 
-from application.api.google_apis import authenticate, getCalendarItems, remove_past_excursions
+from application.api.google_apis import authenticate
 from application.database.models import async_main
 from application.database.requests import get_users
 from application.handlers import router
@@ -36,8 +36,8 @@ async def main() -> None:
 
     scheduler = await setup_scheduler()
 
-    await remove_past_excursions()
-
+    # await remove_past_excursions()
+    # print((await recommend_appointment()))
     try:
         scheduler.start()
         await dp.start_polling(bot)

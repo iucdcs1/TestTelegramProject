@@ -76,6 +76,10 @@ async def editCalendarEvent(exc: Excursion):
 
     event['description'] = message
 
+    event['start']['dateTime'] = datetime.strptime(exc.date + " " + exc.time, "%d.%m.%Y %H:%M:%S").isoformat()
+    event['end']['dateTime'] = (datetime.strptime(exc.date + " " + exc.time, "%d.%m.%Y %H:%M:%S") + timedelta(hours=1,
+                                                                                                              minutes=30)).isoformat()
+
     connection.service.events().update(calendarId=connection.calendar_token, eventId=event['id'], body=event).execute()
 
 
@@ -162,4 +166,5 @@ async def remove_past_excursions():
         event_start = event['start'].get('dateTime', event['start'].get('date'))
         event_start_datetime = datetime.fromisoformat(event_start).replace(tzinfo=None)
         if event_start_datetime < datetime.now() - timedelta(hours=1, minutes=30):
-            await asyncio.to_thread(connection.service.events().delete(calendarId=connection.calendar_token, eventId=event['id']).execute)
+            await asyncio.to_thread(
+                connection.service.events().delete(calendarId=connection.calendar_token, eventId=event['id']).execute)

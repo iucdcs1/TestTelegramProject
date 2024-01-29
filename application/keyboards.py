@@ -43,7 +43,7 @@ week_panel = ReplyKeyboardMarkup(keyboard=[
 report_intervals = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text='Отчёт за день'), KeyboardButton(text='Отчёт за неделю')],
     [KeyboardButton(text='Отчёт за месяц'), KeyboardButton(text='Общий отчёт')],
-    [KeyboardButton(text='Главная')]
+    [KeyboardButton(text='Вернуться')]
 ], resize_keyboard=True, input_field_placeholder='Выберите временной интервал')
 
 
@@ -53,7 +53,8 @@ async def get_intervals():
     intervals_kb.add(InlineKeyboardButton(text="Текущая неделя", callback_data=f'intervals_get_week'))
     intervals_kb.add(InlineKeyboardButton(text="Текущий месяц", callback_data=f'intervals_get_month'))
     intervals_kb.add(InlineKeyboardButton(text="Весь период", callback_data=f'intervals_get_all'))
-    return intervals_kb.adjust(1).as_markup()
+    intervals_kb.add(InlineKeyboardButton(text="<-", callback_data=f'return_admin'))
+    return intervals_kb.adjust(2).as_markup()
 
 
 async def edit_excursions(date_from: str):
@@ -67,14 +68,14 @@ async def edit_excursions(date_from: str):
                 excursions_kb.add(
                     InlineKeyboardButton(text=f"{excursion.date}, {':'.join(str(excursion.time).split(':')[:2])}, "
                                               f"{excursion.contacts.split(', ')[1]}",
-                                         callback_data=f'edit_excursion_{excursion.id}'))
+                                         callback_data=f'edit_excursion_{excursion.id}_1'))
         except ValueError as exception:
             print(exception)
-    excursions_kb.add(InlineKeyboardButton(text="<-", callback_data=f'return_home'))
+    excursions_kb.add(InlineKeyboardButton(text="<-", callback_data=f'to_intervals'))
     return excursions_kb.adjust(1).as_markup()
 
 
-async def edit_properties(excursion_id: int):
+async def edit_properties(excursion_id: int, choice_type: int):
     properties_kb = InlineKeyboardBuilder()
     properties = ['Дата', 'Время', 'Количество человек', 'Маршрут', 'Стоимость', 'Контакты', 'Доп. Информация', 'Гид',
                   'Питание', "Мастер-Класс", "Университет"]
@@ -83,10 +84,19 @@ async def edit_properties(excursion_id: int):
 
     for i in range(len(properties)):
         properties_kb.add(InlineKeyboardButton(text=f"{properties[i]}",
-                                               callback_data=f'edit_properties_{excursion_id}_{properties_callback[i]}'))
+                                               callback_data=f'edit_properties_{excursion_id}_{properties_callback[i]}_{choice_type}'))
 
     properties_kb.add(InlineKeyboardButton(text="Удалить", callback_data=f"remove_confirmation_{excursion_id}"))
-    properties_kb.add(InlineKeyboardButton(text="<-", callback_data=f'return_home'))
+    if choice_type == 0:
+        properties_kb.add(InlineKeyboardButton(text="<-", callback_data=f'to_intervals'))
+    elif choice_type == 1:
+        properties_kb.add(InlineKeyboardButton(text="<-", callback_data=f'intervals_get_date'))
+    elif choice_type == 2:
+        properties_kb.add(InlineKeyboardButton(text="<-", callback_data=f'intervals_get_week'))
+    elif choice_type == 3:
+        properties_kb.add(InlineKeyboardButton(text="<-", callback_data=f'intervals_get_month'))
+    elif choice_type == 4:
+        properties_kb.add(InlineKeyboardButton(text="<-", callback_data=f'intervals_get_all'))
 
     return properties_kb.adjust(2).as_markup()
 
@@ -126,12 +136,12 @@ async def get_unfinished():
         if (excursion.guide is None or len(excursion.guide.split(', ')) < (
                 (
                         excursion.people_free + excursion.people_discount + excursion.people_full - 1) // 23) + 1) and compare_dates(
-            excursion.date, date):
+                        excursion.date, date):
             excursions_kb.add(
                 InlineKeyboardButton(text=f"{excursion.date}, {':'.join(str(excursion.time).split(':')[:2])}, "
                                           f"{excursion.contacts.split(', ')[1]}",
                                      callback_data=f'appoint_excursion_{excursion.id}'))
-    excursions_kb.add(InlineKeyboardButton(text="<-", callback_data=f'return_home'))
+    excursions_kb.add(InlineKeyboardButton(text="<-", callback_data=f'return_admin'))
     return excursions_kb.adjust(1).as_markup()
 
 
@@ -143,7 +153,8 @@ async def week_excursions():
         excursions_kb.add(
             InlineKeyboardButton(text=f"{excursion.date}, {':'.join(str(excursion.time).split(':')[:2])}, "
                                       f"{excursion.contacts.split(', ')[1]}",
-                                 callback_data=f'edit_excursion_{excursion.id}'))
+                                 callback_data=f'edit_excursion_{excursion.id}_2'))
+    excursions_kb.add(InlineKeyboardButton(text="<-", callback_data=f'to_intervals'))
     return excursions_kb.adjust(1).as_markup()
 
 
@@ -155,7 +166,8 @@ async def month_excursions():
         excursions_kb.add(
             InlineKeyboardButton(text=f"{excursion.date}, {':'.join(str(excursion.time).split(':')[:2])}, "
                                       f"{excursion.contacts.split(', ')[1]}",
-                                 callback_data=f'edit_excursion_{excursion.id}'))
+                                 callback_data=f'edit_excursion_{excursion.id}_3'))
+    excursions_kb.add(InlineKeyboardButton(text="<-", callback_data=f'to_intervals'))
     return excursions_kb.adjust(1).as_markup()
 
 
@@ -167,11 +179,12 @@ async def all_excursions():
         excursions_kb.add(
             InlineKeyboardButton(text=f"{excursion.date}, {':'.join(str(excursion.time).split(':')[:2])}, "
                                       f"{excursion.contacts.split(', ')[1]}",
-                                 callback_data=f'edit_excursion_{excursion.id}'))
+                                 callback_data=f'edit_excursion_{excursion.id}_4'))
+    excursions_kb.add(InlineKeyboardButton(text="<-", callback_data=f'to_intervals'))
     return excursions_kb.adjust(2).as_markup()
 
 
-async def appointed_guides(excursion_id: int):
+async def appointed_guides(excursion_id: int, search_type: int):
     guides_kb = InlineKeyboardBuilder()
     guides = await get_guide_list(excursion_id)
 
@@ -181,7 +194,7 @@ async def appointed_guides(excursion_id: int):
             guides_kb.add(InlineKeyboardButton(text=f"{user.name}",
                                                callback_data=f'appoint_excursion_{excursion_id}_{user.id}'))
 
-    guides_kb.add(InlineKeyboardButton(text="<-", callback_data=f'return_home'))
+    guides_kb.add(InlineKeyboardButton(text="<-", callback_data=f'edit_excursion_{excursion_id}_{search_type}'))
     return guides_kb.adjust(1).as_markup()
 
 
@@ -222,7 +235,7 @@ async def free_guides(excursion_id: int, disappoint_guide_id=-1):
                                                            callback_data=f'2_appoint_excursion_{temp.id}_{disappoint_guide_id}_{excursion_id}'))
                         break
 
-    guides_kb.add(InlineKeyboardButton(text="<-", callback_data=f'return_home'))
+    guides_kb.add(InlineKeyboardButton(text="<-", callback_data=f'free_list'))
     return guides_kb.adjust(2).as_markup()
 
 
@@ -233,7 +246,7 @@ async def timetables_choice():
         temp = await get_user(guide)
         timetable_kb.add(InlineKeyboardButton(text=f"{temp.name}",
                                               callback_data=f'timetable_{temp.id}'))
-    timetable_kb.add(InlineKeyboardButton(text="<-", callback_data=f'return_home'))
+    timetable_kb.add(InlineKeyboardButton(text="<-", callback_data=f'return_admin'))
     return timetable_kb.adjust(2).as_markup()
 
 
@@ -256,14 +269,20 @@ def people_types(excursion_id: int):
 
 def food_types(excursion_id: int, complex_number: int):
     type_kb = InlineKeyboardBuilder()
-    type_kb.add(InlineKeyboardButton(text="Комплекс 1 (описание)",
+    type_kb.add(InlineKeyboardButton(text="Стандарт",
                                      callback_data=f'food2_edit_{excursion_id}_{complex_number}_1'))
-    type_kb.add(InlineKeyboardButton(text="Комплекс 2 (описание)",
+    type_kb.add(InlineKeyboardButton(text="Комплекс 1 (за 450)",
                                      callback_data=f'food2_edit_{excursion_id}_{complex_number}_2'))
-    type_kb.add(InlineKeyboardButton(text="Комплекс 3 (описание)",
+    type_kb.add(InlineKeyboardButton(text="Комплекс 2 (за 450)",
                                      callback_data=f'food2_edit_{excursion_id}_{complex_number}_3'))
-    type_kb.add(InlineKeyboardButton(text="Другое",
+    type_kb.add(InlineKeyboardButton(text="Халяль",
                                      callback_data=f'food2_edit_{excursion_id}_{complex_number}_4'))
+    type_kb.add(InlineKeyboardButton(text="Комплекс в технопарке",
+                                     callback_data=f'food2_edit_{excursion_id}_{complex_number}_5'))
+    type_kb.add(InlineKeyboardButton(text="Не нужно",
+                                     callback_data=f'food2_edit_{excursion_id}_{complex_number}_7'))
+    type_kb.add(InlineKeyboardButton(text="Другое",
+                                     callback_data=f'food2_edit_{excursion_id}_{complex_number}_6'))
 
     return type_kb.adjust(1).as_markup()
 

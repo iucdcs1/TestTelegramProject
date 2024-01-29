@@ -74,6 +74,13 @@ async def get_excursion(excursion_id: int) -> Excursion:
         return result
 
 
+async def get_day_excursions() -> [Excursion]:
+    async with async_session() as session:
+        date = '.'.join(str(datetime.datetime.now().date()).split('-')[::-1])
+        result = await session.scalars(select(Excursion).where(Excursion.date == date))
+        return result
+
+
 async def get_week_excursions() -> [Excursion]:
     async with async_session() as session:
         date_from = '.'.join(str(datetime.datetime.now().date()).split('-')[::-1])
@@ -177,7 +184,8 @@ async def remove_excursion(excursion_id: int, finished: bool) -> None:
             else:
                 for guide in guides:
                     if (excursion_info.people_full + excursion_info.people_free + excursion_info.people_discount) < 6:
-                        statement = (update(Statistic).values(amount_individuals=Statistic.amount_individuals + 1).where(
+                        statement = (
+                        update(Statistic).values(amount_individuals=Statistic.amount_individuals + 1).where(
                             Statistic.user_id == int(guide)))
                     else:
                         statement = (update(Statistic).values(amount_groups=Statistic.amount_groups + 1).where(
@@ -270,7 +278,8 @@ async def remove_guide(excursion_id: int, guide_id: int):
 
         await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(guide=result))
         await session.commit()
-        await notify_user((await get_user_by_id(guide_id)).telegram_id, f"Экскурсия на {':'.join((await get_excursion(excursion_id)).time.split(':')[:2])} была отменена!")
+        await notify_user((await get_user_by_id(guide_id)).telegram_id,
+                          f"Экскурсия на {':'.join((await get_excursion(excursion_id)).time.split(':')[:2])} была отменена!")
 
 
 async def add_timetable(guide_id: int, tt: str):
@@ -326,7 +335,8 @@ async def change_people(excursion_id: int, people_type: str, new_people: str):
         if people_type == "free":
             await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(people_free=new_people))
         elif people_type == "discount":
-            await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(people_discount=new_people))
+            await session.execute(
+                update(Excursion).where(Excursion.id == excursion_id).values(people_discount=new_people))
         elif people_type == "full":
             await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(people_full=new_people))
         await session.commit()
@@ -368,7 +378,8 @@ async def change_eat(excursion_id: int, new_eat: int):
 
 async def change_additional_info(excursion_id: int, new_additional_info: str):
     async with async_session() as session:
-        await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(additional_info=new_additional_info))
+        await session.execute(
+            update(Excursion).where(Excursion.id == excursion_id).values(additional_info=new_additional_info))
         await session.commit()
         exc = await get_excursion(excursion_id)
         await editCalendarEvent(exc)
@@ -402,9 +413,11 @@ async def get_report_exc() -> [ExcursionReport]:
 async def update_food(excursion_id: int, complex_number: int, new_type_number: str, new_amount: int):
     async with async_session() as session:
         if complex_number == 1:
-            query = update(Excursion).where(Excursion.id == excursion_id).values(eat1_type=new_type_number, eat1_amount=new_amount)
+            query = update(Excursion).where(Excursion.id == excursion_id).values(eat1_type=new_type_number,
+                                                                                 eat1_amount=new_amount)
         else:
-            query = update(Excursion).where(Excursion.id == excursion_id).values(eat2_type=new_type_number, eat2_amount=new_amount)
+            query = update(Excursion).where(Excursion.id == excursion_id).values(eat2_type=new_type_number,
+                                                                                 eat2_amount=new_amount)
         await session.execute(query)
         await session.commit()
         exc = await get_excursion(excursion_id)

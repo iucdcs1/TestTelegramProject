@@ -108,3 +108,66 @@ async def notify_guides(excursion_id: int, message: str):
         for guide_id in guide_list:
             telegram_id = (await get_user_by_id(int(guide_id))).telegram_id
             await notify_user(telegram_id, message)
+
+
+async def recommend_appointment():
+    from application.database.requests import get_day_excursions, get_users, get_user, get_timetable
+    excursions = await get_day_excursions()
+    guide_schedules = {}
+
+    guide_ids = [(await get_user(guide_tg)).id for guide_tg in (await get_users())]
+
+    for guide_id in guide_ids:
+        guide_schedules[guide_id] = (await get_timetable(guide_id))
+
+    def is_guide_available(guide_schedule_inner, exc):
+        days_en = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        time = getattr(guide_schedule_inner, days_en[datetime.datetime.strptime(exc.date, "%d.%m.%Y").weekday()]).split("; ")
+        if time is not None:
+            if time[0] == "+":
+                return True
+            elif time[0] in ["-", "?"]:
+                return False
+            else:
+                for time_interval in time:
+                    start, end = time_interval.split('-')
+                    excursion_time2 = (
+                            datetime.datetime.strptime(exc.time, "%H:%M:%S") + datetime.timedelta(hours=1,
+                                                                                                  minutes=30)).strftime(
+                        "%H:%M:%S")
+                    if compare_time(exc.time, start) and compare_time(end, excursion_time2):
+                        return True
+        return False
+
+    def backtrack_step(excursion_idx, guide_schedules_backtrack: dict, appointment: dict):
+            for guide_id_backtrack in guide_ids:
+                if is_guide_available(guide_schedules_backtrack[guide_id_backtrack], excursions[excursion_idx]):
+                    appointment[excursion_idx].append(guide_id_backtrack)
+
+
+async def construct_message(excursion_id: int) -> str:
+    from application.database.requests import get_excursion, get_guide_list, get_user_by_id
+
+    excursion_info = await get_excursion(excursion_id)
+    message_food = f'\n{excursion_info.eat1_type}: {excursion_info.eat1_amount} чел.\n{excursion_info.eat2_type}: {excursion_info.eat2_amount} чел.'
+    if excursion_info.eat1_amount <= excursion_info.eat2_amount <= 0:
+        message_food = 'отсутствует'
+    if await get_guide_list(excursion_id) is not None:
+        guides = [(await get_user_by_id(int(idx))) for idx in await get_guide_list(excursion_id)]
+    else:
+        guides = []
+    message = f"Информация по выбранной экскурсии ({excursion_id}):\n" \
+              f"Время: {excursion_info.date}, {':'.join(str(excursion_info.time).split(':')[:2])}\n" \
+              f"Гиды: {', '.join([x.name for x in guides]) if guides != [] else 'Отсутствуют'}\n"
+    message += f"Количество человек: {excursion_info.people_free + excursion_info.people_discount + excursion_info.people_full}\n" \
+               f"Старт: {excursion_info.from_place}\n" \
+               f"Университет: {'+' if excursion_info.university == 1 else '-'}\n" \
+               f"Контакт: {excursion_info.contacts}\n" \
+               f"МК: {excursion_info.mk}\n" \
+               f"------------------------------\nПитание: {message_food}\n------------------------------\n" \
+               f"Стоимость: {excursion_info.money}\n" \
+               f"Доп. Информация: {excursion_info.additional_info if excursion_info.additional_info != '-' else 'Отсутствует'}\n\n" \
+               f"Что нужно изменить?"
+
+    return message
+
