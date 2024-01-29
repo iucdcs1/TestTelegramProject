@@ -23,9 +23,16 @@ class Excursion:
         self.is_group = None
 
     def __str__(self):
-        message_food = f'\n{self.eat1_type}: {self.eat1_amount} чел.\n{self.eat2_type}: {self.eat2_amount} чел.'
-        if self.eat1_amount <= self.eat2_amount <= 0:
-            message_food = 'отсутствует'
+        if self.eat1_amount == 0:
+            if self.eat2_amount == 0:
+                message_food = "\nОтсутствует"
+            else:
+                message_food = f'\n{self.eat2_type}: {self.eat2_amount} чел.'
+        else:
+            if self.eat2_amount == 0:
+                message_food = f'\n{self.eat1_type}: {self.eat1_amount} чел.'
+            else:
+                message_food = f'\n{self.eat1_type}: {self.eat1_amount} чел.\n{self.eat2_type}: {self.eat2_amount} чел.'
         message = f"Информация по выбранной экскурсии ({self.id}):\n" \
                   f"Время: {self.date}, {':'.join(str(self.time).split(':')[:2])}\n" \
                   f"Гиды: подробности в тг-боте\n"

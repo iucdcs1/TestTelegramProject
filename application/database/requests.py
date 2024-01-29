@@ -514,7 +514,7 @@ async def recalculate_cost(excursion_id: int):
             else:
                 exc.money = 2500
         async with async_session() as session:
-            query = update(Excursion).where(Excursion.id == excursion_id).values(money=temp)
+            query = update(Excursion).where(Excursion.id == excursion_id).values(money=exc.money)
             await session.execute(query)
             await session.commit()
             exc = await get_excursion(excursion_id)

@@ -145,29 +145,48 @@ async def recommend_appointment():
                     appointment[excursion_idx].append(guide_id_backtrack)
 
 
-async def construct_message(excursion_id: int) -> str:
+async def construct_message(excursion_id: int, is_guide=False) -> str:
     from application.database.requests import get_excursion, get_guide_list, get_user_by_id
 
     excursion_info = await get_excursion(excursion_id)
-    message_food = f'\n{excursion_info.eat1_type}: {excursion_info.eat1_amount} чел.\n{excursion_info.eat2_type}: {excursion_info.eat2_amount} чел.'
-    if excursion_info.eat1_amount <= excursion_info.eat2_amount <= 0:
-        message_food = 'отсутствует'
+    if excursion_info.eat1_amount == 0:
+        if excursion_info.eat2_amount == 0:
+            message_food = "\nОтсутствует"
+        else:
+            message_food = f'\n{excursion_info.eat2_type}: {excursion_info.eat2_amount} чел.'
+    else:
+        if excursion_info.eat2_amount == 0:
+            message_food = f'\n{excursion_info.eat1_type}: {excursion_info.eat1_amount} чел.'
+        else:
+            message_food = f'\n{excursion_info.eat1_type}: {excursion_info.eat1_amount} чел.\n{excursion_info.eat2_type}: {excursion_info.eat2_amount} чел.'
     if await get_guide_list(excursion_id) is not None:
         guides = [(await get_user_by_id(int(idx))) for idx in await get_guide_list(excursion_id)]
     else:
         guides = []
-    message = f"Информация по выбранной экскурсии ({excursion_id}):\n" \
-              f"Время: {excursion_info.date}, {':'.join(str(excursion_info.time).split(':')[:2])}\n" \
-              f"Гиды: {', '.join([x.name for x in guides]) if guides != [] else 'Отсутствуют'}\n"
-    message += f"Количество человек: {excursion_info.people_free + excursion_info.people_discount + excursion_info.people_full}\n" \
-               f"Старт: {excursion_info.from_place}\n" \
-               f"Университет: {'+' if excursion_info.university == 1 else '-'}\n" \
-               f"Контакт: {excursion_info.contacts}\n" \
-               f"МК: {excursion_info.mk}\n" \
-               f"------------------------------\nПитание: {message_food}\n------------------------------\n" \
-               f"Стоимость: {excursion_info.money}\n" \
-               f"Доп. Информация: {excursion_info.additional_info if excursion_info.additional_info != '-' else 'Отсутствует'}\n\n" \
-               f"Что нужно изменить?"
+
+    if not is_guide:
+        message = f"Информация по выбранной экскурсии ({excursion_id}):\n" \
+                  f"Время: {excursion_info.date}, {':'.join(str(excursion_info.time).split(':')[:2])}\n" \
+                  f"Гиды: {', '.join([x.name for x in guides]) if guides != [] else 'Отсутствуют'}\n"
+        message += f"Количество человек: {excursion_info.people_free + excursion_info.people_discount + excursion_info.people_full}\n" \
+                   f"Старт: {excursion_info.from_place}\n" \
+                   f"Университет: {'+' if excursion_info.university == 1 else '-'}\n" \
+                   f"Контакт: {excursion_info.contacts}\n" \
+                   f"МК: {excursion_info.mk}\n" \
+                   f"------------------------------\nПитание: {message_food}\n------------------------------\n" \
+                   f"Стоимость: {excursion_info.money}\n" \
+                   f"Доп. Информация: {excursion_info.additional_info if excursion_info.additional_info != '-' else 'Отсутствует'}\n"
+    else:
+        message = f"Информация по выбранной экскурсии ({excursion_id}):\n" \
+                  f"Время: {excursion_info.date}, {':'.join(str(excursion_info.time).split(':')[:2])}\n" \
+                  f"Гиды: {', '.join([x.name for x in guides]) if guides != [] else 'Отсутствуют'}\n"
+        message += f"Количество человек: {excursion_info.people_free + excursion_info.people_discount + excursion_info.people_full}\n" \
+                   f"Старт: {excursion_info.from_place}\n" \
+                   f"Университет: {'+' if excursion_info.university == 1 else '-'}\n" \
+                   f"Контакт: {excursion_info.contacts}\n" \
+                   f"МК: {excursion_info.mk}\n" \
+                   f"------------------------------\nПитание: {message_food}\n------------------------------\n" \
+                   f"Доп. Информация: {excursion_info.additional_info if excursion_info.additional_info != '-' else 'Отсутствует'}\n"
 
     return message
 

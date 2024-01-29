@@ -72,28 +72,12 @@ async def home_page(message: Message):
 
 @router.callback_query(F.data.startswith('user_excursion_'))
 async def user_excursion_selected(callback: CallbackQuery):
+
     excursion_id = int(callback.data.split('_')[2])
     excursion_info = await get_excursion(excursion_id)
     guide_id = (await get_user(callback.from_user.id)).id
 
-    message_food = f'\n{excursion_info.eat1_type}: {excursion_info.eat1_amount} чел.\n{excursion_info.eat2_type}: {excursion_info.eat2_amount} чел.'
-    if excursion_info.eat1_amount <= excursion_info.eat2_amount <= 0:
-        message_food = 'отсутствует'
-
-    if await get_guide_list(excursion_id) is not None:
-        guides = [(await get_user_by_id(int(idx))) for idx in await get_guide_list(excursion_id)]
-    else:
-        guides = []
-    message = f"Информация по выбранной экскурсии ({excursion_id}):\n" \
-              f"Время: {excursion_info.date}, {':'.join(str(excursion_info.time).split(':')[:2])}\n" \
-              f"Напарники: {', '.join([x.name for x in guides if x.name != (await get_user_by_id(guide_id)).name]) if len(guides) > 1 else 'Отсутствуют'}\n"
-    message += f"Количество человек: {excursion_info.people_full + excursion_info.people_discount + excursion_info.people_free}\n" \
-               f"Старт: {excursion_info.from_place}\n" \
-               f"Университет: {'+' if excursion_info.university == 1 else '-'}\n" \
-               f"Контакт: {excursion_info.contacts}\n" \
-               f"МК: {excursion_info.mk}\n" \
-               f"------------------------------\nПитание: {message_food}\n------------------------------\n" \
-               f"Доп. Информация: {excursion_info.additional_info if excursion_info.additional_info != '-' else 'Отсутствует'}"
+    message = await construct_message(excursion_id, is_guide=True)
 
     await callback.message.answer(message, reply_markup=await kb.finish_excursion(excursion_id))
 
@@ -208,10 +192,10 @@ async def edit_chosen_property(message: Message, state: FSMContext):
     if excursion_property == "date":
         pattern = re.compile("\d{2}.\d{2}.\d{4}")
         if re.match(pattern, message.text):
-            await change_date(excursion_id, message.text)
-            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+            guides_msg = f"Дата экскурсии на {(await get_excursion(excursion_id)).date}, " \
                          f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
                          f"была изменена!"
+            await change_date(excursion_id, message.text)
             await notify_guides(excursion_id, guides_msg)
             await message.answer(f'{(await construct_message(excursion_id))}',
                                  reply_markup=await kb.edit_properties(excursion_id, 0))
@@ -222,10 +206,10 @@ async def edit_chosen_property(message: Message, state: FSMContext):
     elif excursion_property == "time":
         pattern = re.compile("\d{2}:\d{2}")
         if re.match(pattern, message.text):
-            await change_time(excursion_id, message.text)
-            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+            guides_msg = f"Время экскурсии на {(await get_excursion(excursion_id)).date}, " \
                          f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
-                         f"была изменена!"
+                         f"было изменено!"
+            await change_time(excursion_id, message.text)
             await notify_guides(excursion_id, guides_msg)
             await message.answer(f'{(await construct_message(excursion_id))}',
                                  reply_markup=await kb.edit_properties(excursion_id, 0))
@@ -235,9 +219,9 @@ async def edit_chosen_property(message: Message, state: FSMContext):
     elif excursion_property == "fromplace":
         if message.text in ["Университет", "ОЭЗ", "Артспейс"]:
             await change_from_place(excursion_id, message.text)
-            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+            guides_msg = f"Старт экскурсии на {(await get_excursion(excursion_id)).date}, " \
                          f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
-                         f"была изменена!"
+                         f"был изменён!"
             await notify_guides(excursion_id, guides_msg)
             await message.answer(f'{(await construct_message(excursion_id))}',
                                  reply_markup=await kb.edit_properties(excursion_id, 0))
@@ -248,9 +232,9 @@ async def edit_chosen_property(message: Message, state: FSMContext):
         pattern = re.compile('^((8|\+7)[\- ]?)?(\(?\d{3}\)?[\- ]?)?[\d\- ]{7,10}$')
         if re.match(pattern, message.text.split(', ')[0]) and len(message.text.split(', ')) == 2:
             await change_contacts(excursion_id, message.text)
-            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+            guides_msg = f"Контакты экскурсии на {(await get_excursion(excursion_id)).date}, " \
                          f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
-                         f"была изменена!"
+                         f"были изменены!"
             await notify_guides(excursion_id, guides_msg)
             await message.answer(f'{(await construct_message(excursion_id))}',
                                  reply_markup=await kb.edit_properties(excursion_id, 0))
@@ -261,7 +245,7 @@ async def edit_chosen_property(message: Message, state: FSMContext):
         pattern = re.compile('[0-9]+')
         if re.match(pattern, message.text):
             await change_money(excursion_id, int(message.text))
-            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+            guides_msg = f"Стоимость экскурсии на {(await get_excursion(excursion_id)).date}, " \
                          f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
                          f"была изменена!"
             await notify_guides(excursion_id, guides_msg)
@@ -273,9 +257,9 @@ async def edit_chosen_property(message: Message, state: FSMContext):
     elif excursion_property == "eat":
         if message.text in ["0", "1", "2", "3"]:
             await change_eat(excursion_id, int(message.text))
-            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+            guides_msg = f"Питание эскурсии на {(await get_excursion(excursion_id)).date}, " \
                          f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
-                         f"была изменена!"
+                         f"было изменено!"
             await notify_guides(excursion_id, guides_msg)
             await message.answer(f'{(await construct_message(excursion_id))}',
                                  reply_markup=await kb.edit_properties(excursion_id, 0))
@@ -286,9 +270,9 @@ async def edit_chosen_property(message: Message, state: FSMContext):
         if message.text in ["Чат-бот", "Графический дизайн", "Интернет вещей", "Робототехника", "Оригаметрия", "ИЗО",
                             "Нет"]:
             await change_mk(excursion_id, message.text)
-            guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+            guides_msg = f"Мастер-класс экскурсии на {(await get_excursion(excursion_id)).date}, " \
                          f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
-                         f"была изменена!"
+                         f"был изменён!"
             await notify_guides(excursion_id, guides_msg)
             await message.answer(f'{(await construct_message(excursion_id))}',
                                  reply_markup=await kb.edit_properties(excursion_id, 0))
@@ -299,7 +283,7 @@ async def edit_chosen_property(message: Message, state: FSMContext):
                 reply_markup=kb.admin_panel)
     elif excursion_property == "additionalinfo":
         await change_additional_info(excursion_id, message.text)
-        guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+        guides_msg = f"Доп. информация экскурсии на {(await get_excursion(excursion_id)).date}, " \
                      f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
                      f"была изменена!"
         await notify_guides(excursion_id, guides_msg)
@@ -340,14 +324,14 @@ async def excursion_editing_date(callback: CallbackQuery, callback_data: Callbac
         data = await state.get_data()
         excursion_id = data["id"]
         await state.clear()
+        guides_msg = f"Дата экскурсии на {(await get_excursion(excursion_id)).date}, " \
+                     f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
+                     f"была изменена!"
         await change_date(excursion_id, date.strftime("%d.%m.%Y"))
         await callback.message.answer(
             f'{await construct_message(excursion_id)}',
             reply_markup=await kb.edit_properties(excursion_id, 0)
         )
-        guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
-                     f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
-                     f"была изменена!"
         await notify_guides(excursion_id, guides_msg)
 
 
@@ -568,25 +552,9 @@ async def excursion_selected(callback: CallbackQuery):
     excursion_id = int(callback.data.split('_')[2])
     search_type = int(callback.data.split('_')[3])
     excursion_info = await get_excursion(excursion_id)
-    message_food = f'\n{excursion_info.eat1_type}: {excursion_info.eat1_amount} чел.\n{excursion_info.eat2_type}: {excursion_info.eat2_amount} чел.'
-    if excursion_info.eat1_amount <= excursion_info.eat2_amount <= 0:
-        message_food = 'отсутствует'
-    if await get_guide_list(excursion_id) is not None:
-        guides = [(await get_user_by_id(int(idx))) for idx in await get_guide_list(excursion_id)]
-    else:
-        guides = []
-    message = f"Информация по выбранной экскурсии ({excursion_id}):\n" \
-              f"Время: {excursion_info.date}, {':'.join(str(excursion_info.time).split(':')[:2])}\n" \
-              f"Гиды: {', '.join([x.name for x in guides]) if guides != [] else 'Отсутствуют'}\n"
-    message += f"Количество человек: {excursion_info.people_free + excursion_info.people_discount + excursion_info.people_full}\n" \
-               f"Старт: {excursion_info.from_place}\n" \
-               f"Университет: {'+' if excursion_info.university == 1 else '-'}\n" \
-               f"Контакт: {excursion_info.contacts}\n" \
-               f"МК: {excursion_info.mk}\n" \
-               f"------------------------------\nПитание: {message_food}\n------------------------------\n" \
-               f"Стоимость: {excursion_info.money}\n" \
-               f"Доп. Информация: {excursion_info.additional_info if excursion_info.additional_info != '-' else 'Отсутствует'}\n\n" \
-               f"Что нужно изменить?"
+
+    message = await construct_message(excursion_id)
+    message += "\n\nЧто нужно изменить?"
 
     await callback.message.answer(message, reply_markup=await kb.edit_properties(excursion_id, search_type))
 
@@ -624,9 +592,9 @@ async def edit_people_final(message: Message, state: FSMContext):
     pattern = re.compile('\d{1,2}')
     if re.match(pattern, message.text):
         await change_people(excursion_id, people_type, message.text)
-        guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+        guides_msg = f"Количество человек экскурсии на {(await get_excursion(excursion_id)).date}, " \
                      f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
-                     f"была изменена!"
+                     f"было изменено!"
         await notify_guides(excursion_id, guides_msg)
         await recalculate_cost(excursion_id)
         await message.answer(f'{(await construct_message(excursion_id))}',
@@ -672,9 +640,9 @@ async def set_food_amount(callback: CallbackQuery, state: FSMContext):
         await update_food(excursion_id, complex_number, "Не нужно", 0)
         await callback.message.answer(f'{(await construct_message(excursion_id))}',
                                       reply_markup=await kb.edit_properties(excursion_id, 0))
-        guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+        guides_msg = f"Питание экскурсии на {(await get_excursion(excursion_id)).date}, " \
                      f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
-                     f"была изменена!"
+                     f"было изменено!"
         await notify_guides(excursion_id, guides_msg)
     else:
         await state.set_state(Form.excursion_food_amount)
@@ -712,9 +680,9 @@ async def finish_food(message: Message, state: FSMContext):
     await update_food(excursion_id, complex_number, type_number, new_amount)
     await message.answer(f'{(await construct_message(excursion_id))}',
                          reply_markup=await kb.edit_properties(excursion_id, 0))
-    guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+    guides_msg = f"Питание экскурсии на {(await get_excursion(excursion_id)).date}, " \
                  f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
-                 f"была изменена!"
+                 f"было изменено!"
     await notify_guides(excursion_id, guides_msg)
 
 
@@ -774,9 +742,9 @@ async def excursion_properties_edit(callback: CallbackQuery, state: FSMContext):
     elif excursion_property == 'university':
         await state.clear()
         await change_university(excursion_id)
-        guides_msg = f"Экскурсия на {(await get_excursion(excursion_id)).date}, " \
+        guides_msg = f"Посещение университета экскурсии на {(await get_excursion(excursion_id)).date}, " \
                      f"{':'.join(((await get_excursion(excursion_id)).time.split(':')[:2]))}\n" \
-                     f"была изменена!"
+                     f"было изменено!"
         await notify_guides(excursion_id, guides_msg)
         await callback.message.answer(f'{(await construct_message(excursion_id))}',
                                       reply_markup=await kb.edit_properties(excursion_id, 0))

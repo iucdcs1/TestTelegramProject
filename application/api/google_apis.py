@@ -57,22 +57,10 @@ async def getCalendarExcursion(exc: Excursion):
 
 
 async def editCalendarEvent(exc: Excursion):
+    from application.utilities.tools import construct_message
     event = await getCalendarExcursion(exc)
 
-    message_food = f'\n{exc.eat1_type}: {exc.eat1_amount} чел.\n{exc.eat2_type}: {exc.eat2_amount} чел.'
-    if exc.eat1_amount <= exc.eat2_amount <= 0:
-        message_food = 'отсутствует'
-    message = f"Информация по выбранной экскурсии ({exc.id}):\n" \
-              f"Время: {exc.date}, {':'.join(str(exc.time).split(':')[:2])}\n" \
-              f"Гиды: подробности в тг-боте\n"
-    message += f"Количество человек: {exc.people_free + exc.people_discount + exc.people_full}\n" \
-               f"Старт: {exc.from_place}\n" \
-               f"Университет: {'+' if exc.university == 1 else '-'}\n" \
-               f"Контакт: {exc.contacts}\n" \
-               f"МК: {exc.mk}\n" \
-               f"------------------------------\nПитание: {message_food}\n------------------------------\n" \
-               f"Стоимость: {exc.money}\n" \
-               f"Доп. Информация: {exc.additional_info if exc.additional_info != '-' else 'Отсутствует'}\n\n"
+    message = await construct_message(exc.id)
 
     event['description'] = message
 
@@ -84,10 +72,11 @@ async def editCalendarEvent(exc: Excursion):
 
 
 async def addExcursionToCalendar(exc: Excursion):
+    from application.utilities.tools import construct_message
     event = {
         'summary': f'Экскурсия, {exc.contacts}, {exc.id}',
         'location': 'г. Иннополис',
-        'description': f'{str(exc)}',
+        'description': f'{await construct_message(exc.id)}',
         'start': {
             'dateTime': datetime.strptime(exc.date + " " + exc.time, "%d.%m.%Y %H:%M:%S").isoformat(),
             'timeZone': 'Europe/Moscow'
