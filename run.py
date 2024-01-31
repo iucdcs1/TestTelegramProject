@@ -13,6 +13,17 @@ from application.handlers import router
 from application.middlewares import CounterMiddleware
 from application.utilities.scheduler import setup_scheduler
 
+
+logging.basicConfig(format='\n%(name)s, %(levelname)s:\n%(message)s', level=logging.INFO, stream=sys.stdout)
+logging.getLogger('sqlalchemy').setLevel(logging.ERROR)
+logging.getLogger('sqlalchemy.engine.Engine').setLevel(logging.ERROR)
+
+logging.getLogger("googleapiclient.discovery").setLevel(logging.ERROR)
+
+logging.getLogger('sqlalchemy').propagate = False
+logging.getLogger('sqlalchemy.engine.Engine').propagate = False
+
+
 token = os.getenv("TOKEN_API")
 bot = Bot(token, parse_mode="HTML")
 dp = Dispatcher()
@@ -46,7 +57,6 @@ async def main() -> None:
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

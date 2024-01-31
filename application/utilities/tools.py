@@ -145,10 +145,14 @@ async def recommend_appointment():
                     appointment[excursion_idx].append(guide_id_backtrack)
 
 
-async def construct_message(excursion_id: int, is_guide=False) -> str:
+async def construct_message(excursion_id, is_guide=False) -> str:
     from application.database.requests import get_excursion, get_guide_list, get_user_by_id
 
-    excursion_info = await get_excursion(excursion_id)
+    if isinstance(excursion_id, int):
+        excursion_info = await get_excursion(excursion_id)
+    else:
+        excursion_info = excursion_id
+
     if excursion_info.eat1_amount == 0:
         if excursion_info.eat2_amount == 0:
             message_food = "\nОтсутствует"

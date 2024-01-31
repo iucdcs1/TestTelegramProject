@@ -132,7 +132,6 @@ async def get_excursions_from_sheet() -> [Excursion]:
         result.append(exc)
         backup_sheet.append_row(excursion)
         worksheet.delete_row(idx)
-        await addExcursionToCalendar(exc)
     return result
 
 
