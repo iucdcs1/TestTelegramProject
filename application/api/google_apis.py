@@ -116,8 +116,9 @@ async def get_rows(name: str) -> []:
 
 async def remove_calendar_excursion(exc: Excursion):
     event = await getCalendarExcursion(exc)
-    await asyncio.to_thread(
-        connection.service.events().delete(calendarId=connection.calendar_token, eventId=event['id']).execute)
+    if event:
+        await asyncio.to_thread(
+            connection.service.events().delete(calendarId=connection.calendar_token, eventId=event['id']).execute)
 
 
 async def get_excursions_from_sheet() -> [Excursion]:
