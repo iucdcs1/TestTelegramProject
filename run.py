@@ -14,7 +14,7 @@ from application.middlewares import CounterMiddleware
 from application.utilities.scheduler import setup_scheduler
 
 
-logging.basicConfig(format='\n%(name)s, %(levelname)s:\n%(message)s', level=logging.INFO, stream=sys.stdout)
+logging.basicConfig(filename="logs/log.txt", filemode="a", format='\n%(asctime)s,%(msecs)d n%(name)s, %(levelname)s:\n%(message)s', level=logging.INFO)
 logging.getLogger('sqlalchemy').setLevel(logging.ERROR)
 logging.getLogger('sqlalchemy.engine.Engine').setLevel(logging.ERROR)
 

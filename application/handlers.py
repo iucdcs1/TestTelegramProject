@@ -6,12 +6,10 @@ from aiogram.filters import CommandStart
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
-
-from aiogram_calendar import SimpleCalendarCallback, SimpleCalendar, get_user_locale
+from aiogram_calendar import SimpleCalendarCallback, SimpleCalendar
 
 import application.keyboards as kb
 from application.FSM import Form
-from application.api.google_apis import editCalendarEvent
 from application.database.requests import get_user, get_user_statistics, is_admin, reload_excursions, get_excursion, \
     remove_excursion, get_admins, get_user_by_id, add_guide, add_timetable, get_timetable, change_date, \
     change_time, change_people, change_from_place, change_university, change_contacts, change_money, change_eat, \
@@ -171,7 +169,7 @@ async def current_week(callback: CallbackQuery, state: FSMContext):
     if interval == "date":
         await callback.message.answer('Выберите дату экскурсии:',
                                       reply_markup=await SimpleCalendar(
-                                          locale=await get_user_locale(callback.from_user)).start_calendar())
+                                          locale="ru_RU").start_calendar())
         await state.set_state(Form.excursion_choice_date)
     elif interval == "week":
         await callback.message.answer('Экскурсии текущей недели:', reply_markup=await kb.week_excursions())
@@ -295,7 +293,7 @@ async def edit_chosen_property(message: Message, state: FSMContext):
 @router.callback_query(AdminCommandFilter(), Form.excursion_choice_date, SimpleCalendarCallback.filter())
 async def getting_excursion(callback: CallbackQuery, callback_data: CallbackData, state: FSMContext):
     calendar = SimpleCalendar(
-        locale=await get_user_locale(callback.from_user), show_alerts=True
+        locale="ru_RU", show_alerts=True
     )
     calendar.set_dates_range(datetime.datetime(2024, 1, 1), datetime.datetime(2025, 12, 31))
     selected, date = await calendar.process_selection(callback, callback_data)
@@ -316,7 +314,7 @@ async def to_intervals(callback: CallbackQuery):
 @router.callback_query(AdminCommandFilter(), Form.excursion_edit_date, SimpleCalendarCallback.filter())
 async def excursion_editing_date(callback: CallbackQuery, callback_data: CallbackData, state: FSMContext):
     calendar = SimpleCalendar(
-        locale=await get_user_locale(callback.from_user), show_alerts=True
+        locale="ru_RU", show_alerts=True
     )
     calendar.set_dates_range(datetime.datetime(2024, 1, 1), datetime.datetime(2025, 12, 31))
     selected, date = await calendar.process_selection(callback, callback_data)
@@ -698,7 +696,7 @@ async def excursion_properties_edit(callback: CallbackQuery, state: FSMContext):
         await callback.message.answer(
             f'Выберите новую дату вместо текущей ({(await get_excursion(excursion_id)).date})',
             reply_markup=await SimpleCalendar(
-                locale=await get_user_locale(callback.from_user)).start_calendar())
+                locale="ru_RU").start_calendar())
         await state.set_state(Form.excursion_edit_date)
         await state.update_data(id=excursion_id)
     elif excursion_property == 'time':

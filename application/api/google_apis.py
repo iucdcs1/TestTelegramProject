@@ -47,7 +47,6 @@ async def getCalendarExcursion(exc: Excursion):
         if int(item['summary'].split(', ')[3]) == exc.id:
             eventId = item['id']
             break
-
     if eventId != -1:
         event = await asyncio.to_thread(
             connection.service.events().get(calendarId=connection.calendar_token, eventId=eventId).execute)

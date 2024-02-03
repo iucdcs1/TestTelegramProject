@@ -186,8 +186,8 @@ async def remove_excursion(excursion_id: int, finished: bool) -> None:
                 for guide in guides:
                     if (excursion_info.people_full + excursion_info.people_free + excursion_info.people_discount) < 6:
                         statement = (
-                        update(Statistic).values(amount_individuals=Statistic.amount_individuals + 1).where(
-                            Statistic.user_id == int(guide)))
+                            update(Statistic).values(amount_individuals=Statistic.amount_individuals + 1).where(
+                                Statistic.user_id == int(guide)))
                     else:
                         statement = (update(Statistic).values(amount_groups=Statistic.amount_groups + 1).where(
                             Statistic.user_id == int(guide)))
