@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 
 import gspread
@@ -119,6 +120,8 @@ async def remove_calendar_excursion(exc: Excursion):
     if event:
         await asyncio.to_thread(
             connection.service.events().delete(calendarId=connection.calendar_token, eventId=event['id']).execute)
+    else:
+        logging.error(f"Calendar Removal Failed, excurison: {str(exc)}")
 
 
 async def get_excursions_from_sheet() -> [Excursion]:
