@@ -48,7 +48,7 @@ class Excursion:
 
 
 class Report:
-    def __init__(self, people_free, people_discount, people_full, university_people, money, eats, mks, transfers):
+    def __init__(self, people_free, people_discount, people_full, university_people, money, eats: dict, mks, transfers):
         self.people_free = people_free
         self.people_full = people_full
         self.people_discount = people_discount
@@ -60,8 +60,8 @@ class Report:
 
     def __str__(self):
         food_message = ''
-        for unique_type in set(self.eats):
-            food_message += f"{str(unique_type)}: " + str(self.eats.count(unique_type)) + "\n"
+        for unique_type, value in self.eats.items():
+            food_message += f"{str(unique_type)}: " + str(value) + "\n"
 
         mks_message = ''
         for unique_type in set(self.mks):

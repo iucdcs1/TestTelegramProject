@@ -287,13 +287,13 @@ async def add_timetable(guide_id: int, tt: str):
     async with async_session() as session:
         tt = tt.split('\n')
 
-        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(mon=tt[0].split(': ')[1]))
-        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(tue=tt[1].split(': ')[1]))
-        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(wed=tt[2].split(': ')[1]))
-        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(thu=tt[3].split(': ')[1]))
-        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(fri=tt[4].split(': ')[1]))
-        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(sat=tt[5].split(': ')[1]))
-        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(sun=tt[6].split(': ')[1]))
+        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(mon=tt[0].rstrip(' ').split(': ')[1]))
+        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(tue=tt[1].rstrip(' ').split(': ')[1]))
+        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(wed=tt[2].rstrip(' ').split(': ')[1]))
+        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(thu=tt[3].rstrip(' ').split(': ')[1]))
+        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(fri=tt[4].rstrip(' ').split(': ')[1]))
+        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(sat=tt[5].rstrip(' ').split(': ')[1]))
+        await session.execute(update(Schedule).where(Schedule.user_id == guide_id).values(sun=tt[6].rstrip(' ').split(': ')[1]))
 
         await session.commit()
 
@@ -473,25 +473,35 @@ async def get_report(date_from: str, date_to: str) -> Report:
         people_free = 0
         people_full = 0
         people_discount = 0
-        eats = []
+        eats = {}
         transfers = 0
         mks = []
         money = 0
 
         for exc in excursions:
             if compare_dates_interval(date_from, date_to, datetime.datetime.today().strftime("%d.%m.%Y")):
-                print(True)
                 if exc.university:
                     university_people += (exc.people_free + exc.people_full + exc.people_discount)
+
                 people_free += exc.people_free
                 people_full += exc.people_full
                 people_discount += exc.people_discount
-                if exc.eat:
-                    pass
+
+                if exc.eat1_type not in eats.keys():
+                    eats[exc.eat1_type] = exc.eat1_amount
+                else:
+                    eats[exc.eat1_type] += exc.eat1_amount
+                if exc.eat2_type not in eats.keys():
+                    eats[exc.eat2_type] = exc.eat2_amount
+                else:
+                    eats[exc.eat2_type] += exc.eat2_amount
+
                 if exc.mk:
                     mks.append(exc.mk)
+
                 if exc.transfer:
                     transfers += 1
+                    
                 money += exc.money
 
         return Report(people_free, people_discount, people_full, university_people, money, eats, mks, transfers)

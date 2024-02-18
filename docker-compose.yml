@@ -1,0 +1,8 @@
+version: '3.7'
+services:
+  application:
+    build: .
+    command: sh -c "python application/run.py"
+    env_file:
+      - ./.env
+    restart: always

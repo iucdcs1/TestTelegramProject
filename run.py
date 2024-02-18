@@ -14,7 +14,7 @@ from application.middlewares import CounterMiddleware
 from application.utilities.scheduler import setup_scheduler
 
 
-logging.basicConfig(filename="logs/log.txt", filemode="a", format='\n%(asctime)s,%(msecs)d n%(name)s, %(levelname)s:\n%(message)s', level=logging.INFO)
+logging.basicConfig(format='\n%(asctime)s,%(msecs)d n%(name)s, %(levelname)s:\n%(message)s', level=logging.INFO, stream=sys.stdout)
 logging.getLogger('sqlalchemy').setLevel(logging.ERROR)
 logging.getLogger('sqlalchemy.engine.Engine').setLevel(logging.ERROR)
 
@@ -30,7 +30,10 @@ dp = Dispatcher()
 
 
 async def notify_user(telegram_id, message):
-    await bot.send_message(telegram_id, message)
+    try:
+        await bot.send_message(telegram_id, message)
+    except Exception:
+        logging.error(f'Error sending message to: {telegram_id}, message: {message}')
 
 
 async def main() -> None:
@@ -47,8 +50,6 @@ async def main() -> None:
 
     scheduler = await setup_scheduler()
 
-    # await remove_past_excursions()
-    # print((await recommend_appointment()))
     try:
         scheduler.start()
         await dp.start_polling(bot)

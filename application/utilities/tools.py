@@ -16,6 +16,8 @@ def compare_dates(date1: str, date2: str) -> bool:
 
 
 def compare_time(time1: str, time2: str) -> bool:
+    time1 = time1.replace('.', ':')
+    time2 = time2.replace('.', ':')
     time1, time2 = list(map(int, time1.split(':'))), list(map(int, time2.split(':')))
     if time1[0] > time2[0]:
         return True
@@ -62,7 +64,7 @@ def check_timetable(timetable: str) -> bool:
         return False
     else:
         for day in timetable:
-            temporary = day.split(": ")
+            temporary = day.rstrip(' ').split(": ")
             if len(temporary) != 2:
                 print("BAD LENGTH : ")
                 return False

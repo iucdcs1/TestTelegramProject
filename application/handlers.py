@@ -57,7 +57,8 @@ async def home_page(message: Message, state: FSMContext):
 
 
 @router.message(F.text == 'Главная')
-async def home_page(message: Message):
+async def home_page(message: Message, state: FSMContext):
+    await state.clear()
     await message.delete()
     await message.answer('Возвращаю на главную страницу', reply_markup=kb.main)
 
@@ -70,7 +71,6 @@ async def home_page(message: Message):
 
 @router.callback_query(F.data.startswith('user_excursion_'))
 async def user_excursion_selected(callback: CallbackQuery):
-
     excursion_id = int(callback.data.split('_')[2])
     excursion_info = await get_excursion(excursion_id)
     guide_id = (await get_user(callback.from_user.id)).id
@@ -292,7 +292,7 @@ async def edit_chosen_property(message: Message, state: FSMContext):
 @router.callback_query(AdminCommandFilter(), Form.excursion_choice_date, SimpleCalendarCallback.filter())
 async def getting_excursion(callback: CallbackQuery, callback_data: CallbackData, state: FSMContext):
     calendar = SimpleCalendar(show_alerts=True
-    )
+                              )
     calendar.set_dates_range(datetime.datetime(2024, 1, 1), datetime.datetime(2025, 12, 31))
     selected, date = await calendar.process_selection(callback, callback_data)
     if selected:
@@ -312,7 +312,7 @@ async def to_intervals(callback: CallbackQuery):
 @router.callback_query(AdminCommandFilter(), Form.excursion_edit_date, SimpleCalendarCallback.filter())
 async def excursion_editing_date(callback: CallbackQuery, callback_data: CallbackData, state: FSMContext):
     calendar = SimpleCalendar(show_alerts=True
-    )
+                              )
     calendar.set_dates_range(datetime.datetime(2024, 1, 1), datetime.datetime(2025, 12, 31))
     selected, date = await calendar.process_selection(callback, callback_data)
     if selected:
@@ -453,8 +453,12 @@ async def appoint_excursion(callback: CallbackQuery):
                                       reply_markup=await kb.free_guides(excursion_id,
                                                                         disappoint_guide_id=disappoint_guide_id))
     else:
-        await callback.message.answer('Выберите гида для назначения:',
-                                      reply_markup=await kb.free_guides(excursion_id))
+        try:
+            await callback.message.answer('Выберите гида для назначения:',
+                                          reply_markup=await kb.free_guides(excursion_id))
+        except Exception:
+            await callback.message.answer('Error. handlers.py, 457. Обратитесь к @NPggL с этой информацией для устранения ошибки!',
+                                          reply_markup=kb.admin_panel)
 
 
 @router.callback_query(AdminCommandFilter(), F.data == "free_list")

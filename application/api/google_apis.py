@@ -59,16 +59,16 @@ async def getCalendarExcursion(exc: Excursion):
 async def editCalendarEvent(exc: Excursion):
     from application.utilities.tools import construct_message
     event = await getCalendarExcursion(exc)
+    if event:
+        message = await construct_message(exc.id)
 
-    message = await construct_message(exc.id)
+        event['description'] = message
 
-    event['description'] = message
+        event['start']['dateTime'] = datetime.strptime(exc.date + " " + exc.time, "%d.%m.%Y %H:%M:%S").isoformat()
+        event['end']['dateTime'] = (datetime.strptime(exc.date + " " + exc.time, "%d.%m.%Y %H:%M:%S") + timedelta(hours=1,
+                                                                                                                  minutes=30)).isoformat()
 
-    event['start']['dateTime'] = datetime.strptime(exc.date + " " + exc.time, "%d.%m.%Y %H:%M:%S").isoformat()
-    event['end']['dateTime'] = (datetime.strptime(exc.date + " " + exc.time, "%d.%m.%Y %H:%M:%S") + timedelta(hours=1,
-                                                                                                              minutes=30)).isoformat()
-
-    connection.service.events().update(calendarId=connection.calendar_token, eventId=event['id'], body=event).execute()
+        connection.service.events().update(calendarId=connection.calendar_token, eventId=event['id'], body=event).execute()
 
 
 async def addExcursionToCalendar(exc: Excursion):
@@ -121,7 +121,7 @@ async def remove_calendar_excursion(exc: Excursion):
         await asyncio.to_thread(
             connection.service.events().delete(calendarId=connection.calendar_token, eventId=event['id']).execute)
     else:
-        logging.error(f"Calendar Removal Failed, excurison: {str(exc)}")
+        logging.error(f"Calendar Removal Failed, excursion: {str(exc)}")
 
 
 async def get_excursions_from_sheet() -> [Excursion]:

@@ -58,13 +58,17 @@ async def notify_timetable():
         timetable = await get_timetable((await get_user(guide)).id)
         days_en = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
         days_ru = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
-        message = 'Пожалуйста, заполните своё расписание! Отсутствующие дни: '
+        message = 'Пожалуйста, заполните своё расписание, воспользовавшись меню бота (кнопка "Расписание")!\n' \
+                  'Отсутствующие дни: '
 
         for day_en, day_ru in zip(days_en, days_ru):
             if not getattr(timetable, day_en):
                 message += f'{day_ru}, '
+            elif getattr(timetable, day_en) == '?':
+                message += f'{day_ru}, '
 
-        if message == 'Пожалуйста, заполните своё расписание! Отсутствующие дни: ':
+        if message == 'Пожалуйста, заполните своё расписание, воспользовавшись меню бота (кнопка "Расписание")!\n' \
+                      'Отсутствующие дни: ':
             pass
         else:
             message = message[:-2]
