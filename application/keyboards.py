@@ -239,6 +239,8 @@ async def free_guides(excursion_id: int, disappoint_guide_id=-1):
                                                            callback_data=f'2_appoint_excursion_{temp.id}_{disappoint_guide_id}_{excursion_id}'))
                         break
 
+    if disappoint_guide_id == -1:
+        guides_kb.add(InlineKeyboardButton(text="Сделать свободной", callback_data=f'free_excursion_{excursion_id}'))
     guides_kb.add(InlineKeyboardButton(text="<-", callback_data=f'free_list'))
     return guides_kb.adjust(2).as_markup()
 
@@ -299,9 +301,13 @@ def set_complex_number(excursion_id: int):
     return type_kb.adjust(1).as_markup()
 
 
-def accept(excursion_id: int):
+def accept(excursion_id: int, is_free: bool = False):
     type_kb = InlineKeyboardBuilder()
-    type_kb.add(InlineKeyboardButton(text="Принять", callback_data=f'accept_excursion_{excursion_id}'))
-    type_kb.add(InlineKeyboardButton(text="Отказаться", callback_data=f'decline_excursion_{excursion_id}'))
+    if not is_free:
+        type_kb.add(InlineKeyboardButton(text="Принять", callback_data=f'accept_excursion_{excursion_id}'))
+        type_kb.add(InlineKeyboardButton(text="Отказаться", callback_data=f'decline_excursion_{excursion_id}'))
+    else:
+        type_kb.add(InlineKeyboardButton(text="Принять", callback_data=f'accept_free_excursion_{excursion_id}'))
+        type_kb.add(InlineKeyboardButton(text="Отказаться", callback_data=f'decline_free_excursion_{excursion_id}'))
 
     return type_kb.adjust(2).as_markup()

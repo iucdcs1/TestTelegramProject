@@ -16,9 +16,10 @@ from application.api.google_apis import accept_calendar_excursion, decline_calen
 from application.database.requests import get_user, get_user_statistics, is_admin, reload_excursions, get_excursion, \
     remove_excursion, get_admins, get_user_by_id, add_guide, add_timetable, get_timetable, change_date, \
     change_time, change_people, change_from_place, change_university, change_contacts, change_money, change_eat, \
-    change_mk, change_additional_info, get_guide_list, remove_guide, get_report, add_user, update_food, recalculate_cost
+    change_mk, change_additional_info, get_guide_list, remove_guide, get_report, add_user, update_food, \
+    recalculate_cost, get_users
 from application.filters import UnknownCommandFilter, AdminCommandFilter
-from application.utilities.tools import check_timetable, notify_guides, construct_message
+from application.utilities.tools import check_timetable, notify_guides, construct_message, compare_dates
 
 router = Router()
 
@@ -167,9 +168,10 @@ async def finish_selected_excursion(callback: CallbackQuery, bot: Bot):
 
             return await callback.message.answer(message, reply_markup=kb.main_admin)
         else:
-            return await callback.message.answer(f"Вы не можете завершить экскурсию в данный момент (ещё не прошло 1.5 часа!) :(\n"
-                                          f"Если возникла какая-то проблема - свяжитесь с менеджером!",
-                                          reply_markup=kb.main)
+            return await callback.message.answer(
+                f"Вы не можете завершить экскурсию в данный момент (ещё не прошло 1.5 часа!) :(\n"
+                f"Если возникла какая-то проблема - свяжитесь с менеджером!",
+                reply_markup=kb.main)
 
 
 @router.message(AdminCommandFilter(), F.text == 'Админ-панель')
@@ -481,7 +483,7 @@ async def appoint_excursion(callback: CallbackQuery):
                                                                         disappoint_guide_id=disappoint_guide_id))
     else:
         await callback.message.answer('Выберите гида для назначения:',
-                                          reply_markup=await kb.free_guides(excursion_id))
+                                      reply_markup=await kb.free_guides(excursion_id))
 
 
 @router.callback_query(AdminCommandFilter(), F.data == "free_list")
@@ -504,7 +506,7 @@ async def accept_excursion(callback: CallbackQuery, bot: Bot):
 
 
 @router.callback_query(F.data.startswith('decline_excursion'))
-async def accept_excursion(callback: CallbackQuery, bot: Bot):
+async def decline_excursion(callback: CallbackQuery, bot: Bot):
     excursion_id = int(callback.data.split('_')[2])
     excursion_info = await get_excursion(excursion_id)
     guide = await get_user(callback.from_user.id)
@@ -515,6 +517,33 @@ async def accept_excursion(callback: CallbackQuery, bot: Bot):
     for admin in (await get_admins()):
         await bot.send_message(admin.telegram_id,
                                f"Гид ({guide.name}) отказался от экскурсии на {str(excursion_info.date) + ' ' + str(excursion_info.time)}!")
+
+
+@router.callback_query(F.data.startswith('accept_free_excursion'))
+async def accept_free_excursion(callback: CallbackQuery, bot: Bot):
+    excursion_id = int(callback.data.split('_')[3])
+    excursion_info = await get_excursion(excursion_id)
+    guide = await get_user(callback.from_user.id)
+
+    date = '.'.join(str(datetime.datetime.now().date()).split('-')[::-1])
+
+    if (excursion_info.guide is None or len(excursion_info.guide.split(', ')) < ((
+                                                                                         excursion_info.people_free + excursion_info.people_discount + excursion_info.people_full - 1) // 23) + 1) and compare_dates(
+            excursion_info.date, date):
+        await add_guide(excursion_id, guide.id)
+        await accept_calendar_excursion(excursion_info)
+        await callback.message.answer('Вы приняли экскурсию :)', reply_markup=kb.main)
+        for admin in (await get_admins()):
+            await bot.send_message(admin.telegram_id,
+                                   f"Гид ({guide.name}) принял свободную экскурсию на {str(excursion_info.date) + ', ' + ':'.join(str(excursion_info.time).split(':')[:2])}!")
+    else:
+        await callback.message.answer('К сожалению, эту экскурсию уже успел взять другой гид!', reply_markup=kb.main)
+    await callback.message.delete()
+
+
+@router.callback_query(F.data.startswith('decline_free_excursion'))
+async def decline_free_excursion(callback: CallbackQuery):
+    await callback.message.delete()
 
 
 @router.callback_query(AdminCommandFilter(), F.data.startswith('2_appoint'))
@@ -530,7 +559,7 @@ async def appoint_excursion_final(callback: CallbackQuery, bot: Bot):
 
     await add_guide(excursion_id, guide_id)
     await pending_calendar_excursion(excursion_info)
-    
+
     guides = [(await get_user_by_id(int(idx))) for idx in await get_guide_list(excursion_id)]
 
     message = f"Вам предложена экскурсия ({excursion_id}):\n" \
@@ -545,7 +574,8 @@ async def appoint_excursion_final(callback: CallbackQuery, bot: Bot):
     await bot.send_message((await get_user_by_id(guide_id)).telegram_id, message, reply_markup=kb.accept(excursion_id))
     await callback.message.delete()
     await callback.message.answer("Гиду было отправлено предложение взять экскурсию!")
-    return await callback.message.answer('Список экскурсий требующих назначение:', reply_markup=await kb.get_unfinished())
+    return await callback.message.answer('Список экскурсий требующих назначение:',
+                                         reply_markup=await kb.get_unfinished())
 
 
 @router.callback_query(F.data == 'return_home')
@@ -794,6 +824,22 @@ async def excursion_properties_edit(callback: CallbackQuery, state: FSMContext):
         await notify_guides(excursion_id, guides_msg)
         await callback.message.answer(f'{(await construct_message(excursion_id))}',
                                       reply_markup=await kb.edit_properties(excursion_id, 0))
+
+
+@router.callback_query(F.data.startswith('free_excursion'))
+async def make_excursion_free(callback: CallbackQuery, bot: Bot):
+    excursion_id = int(callback.data.split('_')[2])
+    excursion_info = await get_excursion(excursion_id)
+
+    message = f"Всем гидам была предложена экскурсия, успейте принять! ({excursion_id}):\n" \
+              f"Время: {excursion_info.date}, {':'.join(str(excursion_info.time).split(':')[:2])}\n" \
+              f"Количество человек: {excursion_info.people_discount + excursion_info.people_full + excursion_info.people_free}\n"
+
+    for guide_telegram_id in (await get_users()):
+        guide = await get_user(guide_telegram_id)
+        if guide:
+            if not guide.is_admin:
+                await bot.send_message(guide.telegram_id, message, reply_markup=kb.accept(excursion_id, is_free=True))
 
 
 @router.message(UnknownCommandFilter([None, "/start", "Профиль",

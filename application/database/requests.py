@@ -1,7 +1,5 @@
 import datetime
 
-import sqlalchemy
-
 from application.utilities.tools import compare_dates, compare_dates_interval
 
 from sqlalchemy import select, insert, delete, update
