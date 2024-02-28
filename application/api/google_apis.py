@@ -71,6 +71,27 @@ async def editCalendarEvent(exc: Excursion):
         connection.service.events().update(calendarId=connection.calendar_token, eventId=event['id'], body=event).execute()
 
 
+async def pending_calendar_excursion(exc: Excursion):
+    event = await getCalendarExcursion(exc)
+    if event:
+        event['colorId'] = '5'
+        connection.service.events().update(calendarId=connection.calendar_token, eventId=event['id'], body=event).execute()
+
+
+async def decline_calendar_excursion(exc: Excursion):
+    event = await getCalendarExcursion(exc)
+    if event:
+        event['colorId'] = '11'
+        connection.service.events().update(calendarId=connection.calendar_token, eventId=event['id'], body=event).execute()
+
+
+async def accept_calendar_excursion(exc: Excursion):
+    event = await getCalendarExcursion(exc)
+    if event:
+        event['colorId'] = '10'
+        connection.service.events().update(calendarId=connection.calendar_token, eventId=event['id'], body=event).execute()
+
+
 async def addExcursionToCalendar(exc: Excursion):
     from application.utilities.tools import construct_message
     event = {
@@ -103,15 +124,9 @@ async def getWorkbook(name: str) -> Spreadsheet:
 async def get_rows(name: str) -> []:
     workbook = await getWorkbook(name)
     sheet = workbook.sheet1
-    rows = []
-    amount = 0
-    while True:
-        temp = sheet.row_values(amount + 2)
-        if len(temp) > 0:
-            rows.append(temp)
-            amount += 1
-        else:
-            break
+    
+    data = sheet.get_all_values()[1:31]
+    rows = [row for row in data if any(row)]
     return rows
 
 
@@ -129,7 +144,7 @@ async def get_excursions_from_sheet() -> [Excursion]:
     worksheet = (await getWorkbook("Excursions")).sheet1
     backup_sheet = (await getWorkbook("Excursions")).get_worksheet_by_id(306307666)
     await remove_past_excursions()
-    idx = 2
+    idx = 3
     for excursion in await get_rows("Excursions"):
         exc = await parseRow(excursion)
         result.append(exc)

@@ -1,7 +1,8 @@
 import datetime
 import datetime as dt
+import logging
 
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.filters import CommandStart
 from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.context import FSMContext
@@ -10,6 +11,8 @@ from aiogram_calendar import SimpleCalendarCallback, SimpleCalendar
 
 import application.keyboards as kb
 from application.FSM import Form
+from application.api.google_apis import accept_calendar_excursion, decline_calendar_excursion, \
+    pending_calendar_excursion
 from application.database.requests import get_user, get_user_statistics, is_admin, reload_excursions, get_excursion, \
     remove_excursion, get_admins, get_user_by_id, add_guide, add_timetable, get_timetable, change_date, \
     change_time, change_people, change_from_place, change_university, change_contacts, change_money, change_eat, \
@@ -107,7 +110,7 @@ async def confirm_remove_excursion(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith('finish_'))
-async def finish_selected_excursion(callback: CallbackQuery):
+async def finish_selected_excursion(callback: CallbackQuery, bot: Bot):
     from run import notify_user
 
     excursion_id = int(callback.data.split('_')[1])
@@ -118,7 +121,10 @@ async def finish_selected_excursion(callback: CallbackQuery):
     if datetime.datetime.strptime(exc.date + " " + exc.time, "%d.%m.%Y %H:%M:%S") + datetime.timedelta(hours=1,
                                                                                                        minutes=30) <= datetime.datetime.now():
 
-        guides = [(await get_user_by_id(int(idx))) for idx in await get_guide_list(excursion_id)]
+        if (await get_guide_list(excursion_id)):
+            guides = [(await get_user_by_id(int(idx))) for idx in await get_guide_list(excursion_id)]
+        else:
+            guides = []
 
         await remove_excursion(excursion_id, True)
 
@@ -129,7 +135,7 @@ async def finish_selected_excursion(callback: CallbackQuery):
                               f"Экскурсия на {'.'.join(str(exc.time).split(':')[:2])} завершена. Спасибо за работу =)")
 
         if await is_admin(callback.message.from_user.id):
-            await callback.message.answer(f"Экскурсия завершена. Спасибо за работу =)", reply_markup=kb.main_admin)
+            await callback.message.answer(f"Экскурсия завершена!", reply_markup=kb.main_admin)
         else:
             await callback.message.answer(f"Экскурсия завершена. Спасибо за работу =)", reply_markup=kb.main)
 
@@ -137,15 +143,31 @@ async def finish_selected_excursion(callback: CallbackQuery):
             message = f"Экскурсия на {'.'.join(str(exc.time).split(':')[:2])} завершена! (ID={exc.id})\n" \
                       f"Гиды: {', '.join([x.name for x in guides])}\n" \
                       f"Количество человек: {(exc.people_discount + exc.people_full + exc.people_free)}\n" \
-                      f"Оплата: {exc.money}"
+                      f"Оплата: {exc.money}\n" \
+                      f"Доп. информация: {exc.additional_info}"
             await notify_user(admin.telegram_id, message)
     else:
         if await is_admin(callback.from_user.id):
-            await callback.message.answer(f"Вы не можете завершить экскурсию в данный момент :(\n"
-                                          f"Используйте вкладку 'изменение экскурсий' при необходимости!",
-                                          reply_markup=kb.main_admin)
+            if (await get_guide_list(excursion_id)):
+                guides = [(await get_user_by_id(int(idx))) for idx in await get_guide_list(excursion_id)]
+            else:
+                guides = []
+
+            await remove_excursion(excursion_id, True)
+
+            message = f"Экскурсия на {'.'.join(str(exc.time).split(':')[:2])} завершена! (ID={exc.id})\n" \
+                      f"Гиды: {', '.join([x.name for x in guides])}\n" \
+                      f"Количество человек: {(exc.people_discount + exc.people_full + exc.people_free)}\n" \
+                      f"Оплата: {exc.money}\n" \
+                      f"Доп. информация: {exc.additional_info}"
+
+            for guide in guides:
+                await notify_user(guide.telegram_id,
+                                  f"Экскурсия на {'.'.join(str(exc.time).split(':')[:2])} завершена. Спасибо за работу =)")
+
+            return await callback.message.answer(message, reply_markup=kb.main_admin)
         else:
-            await callback.message.answer(f"Вы не можете завершить экскурсию в данный момент :(\n"
+            return await callback.message.answer(f"Вы не можете завершить экскурсию в данный момент (ещё не прошло 1.5 часа!) :(\n"
                                           f"Если возникла какая-то проблема - свяжитесь с менеджером!",
                                           reply_markup=kb.main)
 
@@ -402,8 +424,12 @@ async def overall_report(message: Message):
 async def download_excursions(message: Message):
     await message.delete()
     await message.answer('Началась выгрузка... Пожалуйста, подождите')
-    await reload_excursions()
-    await message.answer('Выгрузка завершена', reply_markup=kb.admin_panel)
+    try:
+        number = await reload_excursions()
+    except Exception as exception:
+        logging.log(logging.ERROR, str(exception))
+        return await message.answer('Выгрузка была завершена с ошибкой', reply_markup=kb.admin_panel)
+    await message.answer(f'Выгрузка завершена. Загружено {number} экскурсий', reply_markup=kb.admin_panel)
 
 
 @router.message(AdminCommandFilter(), F.text == 'Назначение')
@@ -448,17 +474,14 @@ async def disappoint_guide(callback: CallbackQuery):
 async def appoint_excursion(callback: CallbackQuery):
     excursion_id = int(callback.data.split('_')[2])
     if len(callback.data.split('_')) == 4:
+        await callback.message.delete()
         disappoint_guide_id = int(callback.data.split('_')[3])
         await callback.message.answer('Выберите гида для назначения:',
                                       reply_markup=await kb.free_guides(excursion_id,
                                                                         disappoint_guide_id=disappoint_guide_id))
     else:
-        try:
-            await callback.message.answer('Выберите гида для назначения:',
+        await callback.message.answer('Выберите гида для назначения:',
                                           reply_markup=await kb.free_guides(excursion_id))
-        except Exception:
-            await callback.message.answer('Error. handlers.py, 457. Обратитесь к @NPggL с этой информацией для устранения ошибки!',
-                                          reply_markup=kb.admin_panel)
 
 
 @router.callback_query(AdminCommandFilter(), F.data == "free_list")
@@ -467,25 +490,50 @@ async def free_excursions(callback: CallbackQuery):
     await callback.message.answer('Список экскурсий требующих назначение:', reply_markup=await kb.get_unfinished())
 
 
-@router.callback_query(AdminCommandFilter(), F.data.startswith('2_appoint'))
-async def appoint_excursion_final(callback: CallbackQuery):
-    from run import notify_user
+@router.callback_query(F.data.startswith('accept_excursion'))
+async def accept_excursion(callback: CallbackQuery, bot: Bot):
+    excursion_id = int(callback.data.split('_')[2])
+    excursion_info = await get_excursion(excursion_id)
+    guide = await get_user(callback.from_user.id)
+    await callback.message.delete()
+    await accept_calendar_excursion(excursion_info)
 
+    for admin in (await get_admins()):
+        await bot.send_message(admin.telegram_id,
+                               f"Гид ({guide.name}) принял экскурсию на {str(excursion_info.date) + ', ' + ':'.join(str(excursion_info.time).split(':')[:2])}!")
+
+
+@router.callback_query(F.data.startswith('decline_excursion'))
+async def accept_excursion(callback: CallbackQuery, bot: Bot):
+    excursion_id = int(callback.data.split('_')[2])
+    excursion_info = await get_excursion(excursion_id)
+    guide = await get_user(callback.from_user.id)
+
+    await remove_guide(excursion_id, guide.id)
+    await decline_calendar_excursion(excursion_info)
+
+    for admin in (await get_admins()):
+        await bot.send_message(admin.telegram_id,
+                               f"Гид ({guide.name}) отказался от экскурсии на {str(excursion_info.date) + ' ' + str(excursion_info.time)}!")
+
+
+@router.callback_query(AdminCommandFilter(), F.data.startswith('2_appoint'))
+async def appoint_excursion_final(callback: CallbackQuery, bot: Bot):
     excursion_id = int(callback.data.split('_')[5])
     guide_id = int(callback.data.split('_')[3])
 
     disappoint_guide_id = int(callback.data.split('_')[4])
+    excursion_info = await get_excursion(excursion_id)
+
     if disappoint_guide_id != -1:
         await remove_guide(excursion_id, disappoint_guide_id)
 
     await add_guide(excursion_id, guide_id)
-    await callback.message.answer("Гид был назначен!", reply_markup=kb.admin_panel)
-
-    excursion_info = await get_excursion(excursion_id)
-
+    await pending_calendar_excursion(excursion_info)
+    
     guides = [(await get_user_by_id(int(idx))) for idx in await get_guide_list(excursion_id)]
 
-    message = f"Вам назначена экскурсия ({excursion_id}):\n" \
+    message = f"Вам предложена экскурсия ({excursion_id}):\n" \
               f"Время: {excursion_info.date}, {':'.join(str(excursion_info.time).split(':')[:2])}\n" \
               f"Количество человек: {excursion_info.people_discount + excursion_info.people_full + excursion_info.people_free}\n" \
               f"Место: {excursion_info.from_place}\n" \
@@ -494,9 +542,10 @@ async def appoint_excursion_final(callback: CallbackQuery):
               f"Напарники: {', '.join([x.name for x in guides if x.name != (await get_user_by_id(guide_id)).name])}\n" \
               f"Доп. Информация: {excursion_info.additional_info if excursion_info.additional_info != '-' else 'отсутствует'}"
 
-    telegram_id = (await get_user_by_id(guide_id)).telegram_id
-    await notify_user(telegram_id, message)
-    await callback.message.answer('Список экскурсий требующих назначение:', reply_markup=await kb.get_unfinished())
+    await bot.send_message((await get_user_by_id(guide_id)).telegram_id, message, reply_markup=kb.accept(excursion_id))
+    await callback.message.delete()
+    await callback.message.answer("Гиду было отправлено предложение взять экскурсию!")
+    return await callback.message.answer('Список экскурсий требующих назначение:', reply_markup=await kb.get_unfinished())
 
 
 @router.callback_query(F.data == 'return_home')
@@ -550,7 +599,6 @@ async def add_user_guide(message: Message):
 async def excursion_selected(callback: CallbackQuery):
     excursion_id = int(callback.data.split('_')[2])
     search_type = int(callback.data.split('_')[3])
-    excursion_info = await get_excursion(excursion_id)
 
     message = await construct_message(excursion_id)
     message += "\n\nЧто нужно изменить?"

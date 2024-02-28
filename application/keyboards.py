@@ -1,4 +1,5 @@
 import datetime
+import logging
 
 from aiogram.types import InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -86,6 +87,7 @@ async def edit_properties(excursion_id: int, choice_type: int):
         properties_kb.add(InlineKeyboardButton(text=f"{properties[i]}",
                                                callback_data=f'edit_properties_{excursion_id}_{properties_callback[i]}_{choice_type}'))
 
+    properties_kb.add(InlineKeyboardButton(text='Завершить', callback_data=f'finish_{excursion_id}'))
     properties_kb.add(InlineKeyboardButton(text="Удалить", callback_data=f"remove_confirmation_{excursion_id}"))
     if choice_type == 0:
         properties_kb.add(InlineKeyboardButton(text="<-", callback_data=f'to_intervals'))
@@ -214,13 +216,15 @@ async def free_guides(excursion_id: int, disappoint_guide_id=-1):
                     continue
 
         days_en = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-
-        time = getattr(schedule, days_en[datetime.datetime.strptime(excursion.date, "%d.%m.%Y").weekday()]).split("; ")
+        try:
+            time = getattr(schedule, days_en[datetime.datetime.strptime(excursion.date, "%d.%m.%Y").weekday()]).rstrip(' ').split("; ")
+        except Exception:
+            logging.error(f'{excursion_id}: {temp.id}. {schedule}')
         if time is not None:
-            if time[0] == '+':
+            if time[0] == '+' or time[0] == '+ ' or time[0] == ' +':
                 guides_kb.add(InlineKeyboardButton(text=f"{temp.name}",
                                                    callback_data=f'2_appoint_excursion_{temp.id}_{disappoint_guide_id}_{excursion_id}'))
-            elif time[0] == '-' or time[0] == '?':
+            elif time[0] == '-' or time[0] == '?' or time[0] == ' -' or time[0] == ' ?' or time[0] == '- ' or time[0] == '? ':
                 continue
             else:
                 for time_interval in time:
@@ -293,3 +297,11 @@ def set_complex_number(excursion_id: int):
     type_kb.add(InlineKeyboardButton(text="Изменить второй комплекс", callback_data=f'food1_edit_{excursion_id}_2'))
 
     return type_kb.adjust(1).as_markup()
+
+
+def accept(excursion_id: int):
+    type_kb = InlineKeyboardBuilder()
+    type_kb.add(InlineKeyboardButton(text="Принять", callback_data=f'accept_excursion_{excursion_id}'))
+    type_kb.add(InlineKeyboardButton(text="Отказаться", callback_data=f'decline_excursion_{excursion_id}'))
+
+    return type_kb.adjust(2).as_markup()

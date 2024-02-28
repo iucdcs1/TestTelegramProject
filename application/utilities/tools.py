@@ -1,4 +1,5 @@
 import datetime
+import logging
 
 
 def compare_dates(date1: str, date2: str) -> bool:
@@ -16,9 +17,12 @@ def compare_dates(date1: str, date2: str) -> bool:
 
 
 def compare_time(time1: str, time2: str) -> bool:
-    time1 = time1.replace('.', ':')
-    time2 = time2.replace('.', ':')
-    time1, time2 = list(map(int, time1.split(':'))), list(map(int, time2.split(':')))
+    time1 = time1.replace('.', ':').rstrip(' ')
+    time2 = time2.replace('.', ':').rstrip(' ')
+    try:
+        time1, time2 = list(map(int, time1.split(':'))), list(map(int, time2.split(':')))
+    except Exception as exc:
+        logging.error(str(exc) + ' ' + time1 + ' ' + time2)
     if time1[0] > time2[0]:
         return True
     elif time1[0] == time2[0]:
@@ -195,4 +199,3 @@ async def construct_message(excursion_id, is_guide=False) -> str:
                    f"Доп. Информация: {excursion_info.additional_info if excursion_info.additional_info != '-' else 'Отсутствует'}\n"
 
     return message
-

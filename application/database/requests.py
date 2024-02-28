@@ -1,5 +1,7 @@
 import datetime
 
+import sqlalchemy
+
 from application.utilities.tools import compare_dates, compare_dates_interval
 
 from sqlalchemy import select, insert, delete, update
@@ -134,7 +136,7 @@ async def get_user_excursions(telegram_id: int) -> [Excursion]:
     return result
 
 
-async def reload_excursions() -> None:
+async def reload_excursions() -> int:
     from application.api.google_apis import addExcursionToCalendar
     excursions = await get_excursions_from_sheet()
     async with async_session() as session:
@@ -169,6 +171,7 @@ async def reload_excursions() -> None:
                 await addExcursionToCalendar(exc)
 
     await remove_past_excursions()
+    return len(excursions)
 
 
 async def remove_excursion(excursion_id: int, finished: bool) -> None:
@@ -260,13 +263,14 @@ async def add_guide(excursion_id: int, guide_id: int):
         await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(guide=temp))
         await session.commit()
 
+    await editCalendarEvent((await get_excursion(excursion_id)))
+
 
 async def remove_guide(excursion_id: int, guide_id: int):
     from run import notify_user
     async with async_session() as session:
         temp = await get_guide_list(excursion_id)
         result = ''
-        print(temp, "\n" * 10)
         if len(temp) == 1:
             pass
         else:
@@ -277,8 +281,12 @@ async def remove_guide(excursion_id: int, guide_id: int):
                     else:
                         result += ', ' + guide
 
-        await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(guide=result))
+        if result == '':
+            await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(guide=None))
+        else:
+            await session.execute(update(Excursion).where(Excursion.id == excursion_id).values(guide=result))
         await session.commit()
+        await editCalendarEvent((await get_excursion(excursion_id)))
         await notify_user((await get_user_by_id(guide_id)).telegram_id,
                           f"Экскурсия на {':'.join((await get_excursion(excursion_id)).time.split(':')[:2])} была отменена!")
 
